@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentCouncil Web Dashboard</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0; padding: 0; background: #f5f7fa; color: #1a1a2e;
+            min-height: 100vh;
+        }
+        .header {
+            background: #fff; border-bottom: 1px solid #e0e4e8;
+            padding: 16px 24px; position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h1 { margin: 0; font-size: 1.5rem; font-weight: 600; color: #1a1a2e; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+        .btn {
+            padding: 8px 16px; border-radius: 6px; border: none;
+            font-size: 0.875rem; font-weight: 500; cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn:disabled { opacity: 0.6; cursor: default; }
+        .btn-primary { background: #2563eb; color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+        .btn-secondary { background: #e0e4e8; color: #374151; }
+        .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+        @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+        .card {
+            background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #e0e4e8; overflow: hidden;
+        }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid #e0e4e8; font-weight: 600; }
+        .card-body { padding: 20px; }
+        .session-list { list-style: none; margin: 0; padding: 0; }
+        .session-item {
+            padding: 16px 20px; border-bottom: 1px solid #e0e4e8;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .session-item:last-child { border-bottom: none; }
+        .session-item:hover { background: #f9fafb; }
+        .session-item.active { background: #eff6ff; border-left: 3px solid #2563eb; }
+        .session-meta { display: flex; flex-direction: column; gap: 4px; }
+        .session-title { font-weight: 500; color: #1a1a2e; }
+        .session-meta-row { display: flex; gap: 12px; font-size: 0.75rem; color: #6b7280; align-items: center; flex-wrap: wrap; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+        .badge-completed { background: #dcfce7; color: #166534; }
+        .badge-failed { background: #fee2e2; color: #991b1b; }
+        .badge-running { background: #dbeafe; color: #1e40af; }
+        .detail-empty { text-align: center; padding: 60px 20px; color: #6b7280; }
+        .markdown-content { white-space: pre-wrap; font-family: inherit; line-height: 1.7; }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 { margin: 1.5em 0 0.5em; font-weight: 600; }
+        .markdown-content code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.875em; }
+        .markdown-content pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; }
+        .markdown-content pre code { background: none; padding: 0; }
+        .markdown-content blockquote { margin: 0; padding: 4px 14px; border-left: 3px solid #d1d5db; color: #6b7280; }
+        .run-form { display: flex; flex-direction: column; gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.875rem; font-weight: 500; color: #374151; }
+        .form-group textarea, .form-group input, .form-group select {
+            padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;
+            font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-group textarea:focus, .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+        }
+        .form-group textarea { min-height: 90px; resize: vertical; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; }
+        .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; }
+        .agents-list { display: flex; flex-direction: column; gap: 8px; }
+        .agent-tag { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f3f4f6; border-radius: 6px; font-size: 0.8125rem; }
+        .agent-tag input { accent-color: #2563eb; }
+        .agent-tag.unavailable { color: #9ca3af; }
+        .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #6b7280; }
+        .spinner { width: 24px; height: 24px; border: 3px solid #e0e4e8; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tabs { display: flex; gap: 4px; padding: 4px; background: #f3f4f6; border-radius: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab { padding: 8px 16px; border-radius: 6px; font-size: 0.8125rem; font-weight: 500; color: #6b7280; cursor: pointer; border: none; background: transparent; }
+        .tab.active { background: #fff; color: #1a1a2e; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .round-messages { display: flex; flex-direction: column; gap: 12px; }
+        .agent-message { background: #f9fafb; border-radius: 8px; padding: 16px; border: 1px solid #e0e4e8; }
+        .agent-message-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.8125rem; }
+        .agent-name { font-weight: 600; color: #1a1a2e; }
+        .vote-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+        .vote-card { background: #f9fafb; border-radius: 8px; padding: 16px; text-align: center; border: 1px solid #e0e4e8; }
+        .vote-score { font-size: 2rem; font-weight: 700; color: #1a1a2e; line-height: 1; }
+        .vote-label { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
+        .status-grid { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 8px; }
+        .status-grid th, .status-grid td { padding: 8px 10px; border-bottom: 1px solid #e0e4e8; text-align: left; }
+        .status-grid th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .grid-agent { font-weight: 500; }
+        .grid-cell-running { color: #1e40af; font-weight: 600; }
+        .grid-cell-done { color: #166534; font-weight: 600; }
+        .grid-cell-error { color: #991b1b; font-weight: 600; }
+        .grid-cell-timeout { color: #92400e; font-weight: 600; }
+        .progress-track { background: #e0e4e8; border-radius: 6px; height: 10px; overflow: hidden; }
+        .progress-fill { background: #2563eb; height: 100%; width: 0%; transition: width 0.3s ease; }
+        .log-panel {
+            background: #1e1e1e; color: #d4d4d4; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.75rem; padding: 12px; border-radius: 8px; height: 220px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-word;
+        }
+        .banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.875rem; }
+        .banner-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .evidence-hint { font-size: 0.75rem; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>AgentCouncil Dashboard</h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-refresh">Refresh</button>
+            <button class="btn btn-primary" id="btn-new-run">New Council Run</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="grid">
+            <!-- Sessions Sidebar -->
+            <aside class="card" style="height: fit-content; position: sticky; top: 100px; max-height: calc(100vh - 140px); overflow-y: auto;">
+                <div class="card-header">Sessions</div>
+                <ul class="session-list" id="sessions-list">
+                    <li class="loading"><div class="spinner"></div>Loading...</li>
+                </ul>
+            </aside>
+
+            <!-- Detail Panel -->
+            <main class="card" style="min-height: 600px;">
+                <div id="detail-panel">
+                    <div class="detail-empty">
+                        <h3>Select a session</h3>
+                        <p>Click a session from the list to view details, or start a new run.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module">
+        const $ = (sel, root = document) => root.querySelector(sel);
+        const $all = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+        function esc(s) {
+            return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        async function api(path, opts) {
+            const res = await fetch(path, opts);
+            if (!res.ok) {
+                let detail = res.statusText;
+                try {
+                    const body = await res.json();
+                    detail = body.detail || detail;
+                } catch { /* body wasn't JSON */ }
+                throw new Error(detail);
+            }
+            return res.json();
+        }
+
+        // --- Tiny markdown renderer: headings, fenced code, inline code/bold/
+        // italic/links, lists, blockquotes, hr, paragraphs. Same subset the
+        // desktop GUI's mdview.py covers (no tables — verdict.md doesn't use them).
+        function mdToHtml(src) {
+            const lines = String(src ?? '').replace(/\r\n/g, '\n').split('\n');
+            let html = '';
+            let i = 0;
+            let listType = null;
+
+            function closeList() {
+                if (listType) { html += `</${listType}>`; listType = null; }
+            }
+
+            function inline(text) {
+                let t = esc(text);
+                t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+                t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+                t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+                t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+                t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+                return t;
+            }
+
+            const blockStart = /^(#{1,6})\s|^```|^>\s?|^\s*[-*+]\s|^\s*\d+[.)]\s|^(-{3,}|\*{3,}|_{3,})\s*$/;
+
+            while (i < lines.length) {
+                const line = lines[i];
+
+                if (/^```/.test(line)) {
+                    closeList();
+                    const fence = [];
+                    i++;
+                    while (i < lines.length && !/^```/.test(lines[i])) { fence.push(lines[i]); i++; }
+                    html += `<pre><code>${esc(fence.join('\n'))}</code></pre>`;
+                    i++;
+                    continue;
+                }
+
+                const heading = line.match(/^(#{1,6})\s+(.*)$/);
+                if (heading) {
+                    closeList();
+                    const level = heading[1].length;
+                    html += `<h${level}>${inline(heading[2])}</h${level}>`;
+                    i++;
+                    continue;
+                }
+
+                if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+                    closeList();
+                    html += '<hr>';
+                    i++;
+                    continue;
+                }
+
+                if (/^>\s?/.test(line)) {
+                    closeList();
+                    const buf = [line.replace(/^>\s?/, '')];
+                    i++;
+                    while (i < lines.length && /^>\s?/.test(lines[i])) {
+                        buf.push(lines[i].replace(/^>\s?/, ''));
+                        i++;
+                    }
+                    html += `<blockquote>${inline(buf.join(' '))}</blockquote>`;
+                    continue;
+                }
+
+                const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+                const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+                if (ul || ol) {
+                    const wantType = ul ? 'ul' : 'ol';
+                    if (listType !== wantType) { closeList(); html += `<${wantType}>`; listType = wantType; }
+                    html += `<li>${inline((ul || ol)[1])}</li>`;
+                    i++;
+                    continue;
+                }
+
+                closeList();
+                if (line.trim() === '') { i++; continue; }
+                const buf = [line];
+                i++;
+                while (i < lines.length && lines[i].trim() !== '' && !blockStart.test(lines[i])) {
+                    buf.push(lines[i]);
+                    i++;
+                }
+                html += `<p>${inline(buf.join('\n')).replace(/\n/g, '<br>')}</p>`;
+            }
+            closeList();
+            return html;
+        }
+
+        // --- Sessions sidebar ---
+        const STATUS_BADGE_CLASS = { completed: 'badge-completed', failed: 'badge-failed', running: 'badge-running' };
+
+        async function loadSessions(selectAfter) {
+            const list = $('#sessions-list');
+            list.innerHTML = '<li class="loading"><div class="spinner"></div>Loading...</li>';
+            try {
+                const sessions = await api('/api/sessions');
+                if (!sessions.length) {
+                    list.innerHTML = '<li class="detail-empty" style="padding:24px 20px;">No sessions yet</li>';
+                    return;
+                }
+                list.innerHTML = sessions.map((s) => `
+                    <li class="session-item" data-session-id="${esc(s.session_id)}">
+                        <div class="session-meta">
+                            <div class="session-title">${esc((s.idea_preview || '(no idea)').slice(0, 80)) || '(no idea)'}</div>
+                            <div class="session-meta-row">
+                                <span class="badge ${STATUS_BADGE_CLASS[s.status] || 'badge-failed'}">${esc(s.status)}</span>
+                                <span>${esc(s.session_id)}</span>
+                            </div>
+                        </div>
+                    </li>`).join('');
+                if (selectAfter) {
+                    const el = list.querySelector(`.session-item[data-session-id="${CSS.escape(selectAfter)}"]`);
+                    if (el) el.classList.add('active');
+                    selectSession(selectAfter);
+                }
+            } catch (err) {
+                list.innerHTML = `<li class="detail-empty">Failed to load sessions: ${esc(err.message)}</li>`;
+            }
+        }
+
+        document.body.addEventListener('click', (e) => {
+            const item = e.target.closest('.session-item');
+            if (item && item.dataset.sessionId) {
+                $all('.session-item').forEach((el) => el.classList.remove('active'));
+                item.classList.add('active');
+                selectSession(item.dataset.sessionId);
+            }
+            const tab = e.target.closest('.tab');
+            if (tab) {
+                const panelId = tab.dataset.panel;
+                tab.parentElement.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabsBlock = tab.closest('.tabs') || tab.parentElement;
+                tabsBlock.parentElement.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+                const target = document.getElementById(panelId);
+                if (target) target.classList.add('active');
+            }
+        });
+
+        // --- Session detail (past or finished runs) ---
+        async function selectSession(id) {
+            const panel = $('#detail-panel');
+            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+            try {
+                const detail = await api(`/api/sessions/${encodeURIComponent(id)}`);
+                renderSessionDetail(detail);
+            } catch (err) {
+                panel.innerHTML = `<div class="detail-empty">Failed to load session: ${esc(err.message)}</div>`;
+            }
+        }
+
+        function renderVote(vote) {
+            const votes = vote.votes || {};
+            const cards = Object.entries(votes).map(([name, v]) => `
+                <div class="vote-card">
+                    <div class="vote-score">${v.score ?? '—'}</div>
+                    <div class="vote-label">${esc(name)}${v.verdict ? ' · ' + esc(v.verdict) : ''}</div>
+                </div>`).join('');
+            const summary = `
+                <div class="vote-card">
+                    <div class="vote-score">${vote.average_score ?? '—'}</div>
+                    <div class="vote-label">Average</div>
+                </div>`;
+            const missing = (vote.missing || []).length
+                ? `<p style="color:#6b7280;margin-top:12px;">No vote from: ${esc(vote.missing.join(', '))}</p>`
+                : '';
+            return `<div class="vote-summary">${summary}${cards}</div>${missing}`;
+        }
+
+        function renderSessionDetail(detail) {
+            const panel = $('#detail-panel');
+            const tabs = [['overview', 'Overview']];
+            for (const r of ['round1', 'round2', 'round3']) {
+                if (detail.rounds && detail.rounds[r] && Object.keys(detail.rounds[r]).length) {
+                    tabs.push([r, r[0].toUpperCase() + r.slice(1).replace('round', 'Round ')]);
+                }
+            }
+            if (detail.claims_map_text) tabs.push(['claims', 'Claims']);
+            if (detail.vote) tabs.push(['vote', 'Vote']);
+
+            const verdictMd = detail.task_verdict_markdown || detail.verdict_markdown;
+
+            panel.innerHTML = `
+                <div class="card-body">
+                    <h2 style="margin:0 0 4px;">${esc(detail.session_id)}</h2>
+                    <p style="color:#6b7280;margin:0 0 16px;">${esc(detail.idea_preview)}</p>
+                    <div class="tabs">
+                        ${tabs.map(([id, label], idx) => `<button class="tab ${idx === 0 ? 'active' : ''}" data-panel="tab-${id}">${esc(label)}</button>`).join('')}
+                    </div>
+                    <div class="tab-panel active" id="tab-overview">
+                        ${verdictMd ? `<div class="markdown-content">${mdToHtml(verdictMd)}</div>` : '<p style="color:#6b7280;">No verdict yet — the run may still be in progress, or it did not complete.</p>'}
+                    </div>
+                    ${['round1', 'round2', 'round3'].map((r) => (detail.rounds && detail.rounds[r] && Object.keys(detail.rounds[r]).length) ? `
+                        <div class="tab-panel" id="tab-${r}">
+                            <div class="round-messages">
+                                ${Object.entries(detail.rounds[r]).map(([agent, text]) => `
+                                    <div class="agent-message">
+                                        <div class="agent-message-header"><span class="agent-name">${esc(agent)}</span></div>
+                                        <div class="markdown-content">${mdToHtml(text)}</div>
+                                    </div>`).join('')}
+                            </div>
+                        </div>` : '').join('')}
+                    ${detail.claims_map_text ? `
+                        <div class="tab-panel" id="tab-claims">
+                            <pre style="white-space:pre-wrap;font-family:inherit;line-height:1.6;margin:0;">${esc(detail.claims_map_text)}</pre>
+                        </div>` : ''}
+                    ${detail.vote ? `
+                        <div class="tab-panel" id="tab-vote">
+                            ${renderVote(detail.vote)}
+                        </div>` : ''}
+                </div>`;
+        }
+
+        // --- New run form ---
+        async function showRunForm() {
+            const panel = $('#detail-panel');
+            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Loading agents...</div>';
+            let agentsResp;
+            try {
+                agentsResp = await api('/api/agents');
+            } catch (err) {
+                panel.innerHTML = `<div class="detail-empty">Failed to load agents: ${esc(err.message)}</div>`;
+                return;
+            }
+            const agents = agentsResp.agents;
+            panel.innerHTML = `
+                <div class="card-body">
+                    <h2 style="margin:0 0 16px;">New Council Run</h2>
+                    <form id="run-form" class="run-form">
+                        <div class="form-group">
+                            <label for="rf-task">Idea / Task</label>
+                            <textarea id="rf-task" name="task" required placeholder="Describe your idea..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Agents ${agents.length ? '' : '<span style="color:#991b1b;">— none discovered</span>'}</label>
+                            <div class="agents-list">
+                                ${agents.map((a) => `
+                                    <label class="agent-tag ${a.available ? '' : 'unavailable'}">
+                                        <input type="checkbox" name="agent" value="${esc(a.id)}" ${a.is_default ? 'checked' : ''} ${a.available ? '' : 'disabled'}>
+                                        <span>${esc(a.name)}${a.kind === 'openai' ? ' · ' + esc(a.model || 'openai') : ''}${a.available ? '' : ' (unavailable)'}</span>
+                                    </label>`).join('') || '<p class="evidence-hint">No agents found — check council.json / PATH.</p>'}
+                            </div>
+                            <p class="evidence-hint">Leave all unchecked to use the default council.</p>
+                            <button type="button" class="btn btn-secondary" id="toggle-add-agent" style="align-self:flex-start;">+ Add agent</button>
+                            <div id="add-agent-panel" style="display:none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="rf-preset">Preset</label>
+                            <select id="rf-preset" name="preset">
+                                <option value="">None</option>
+                                <option value="hypothesis">Hypothesis</option>
+                                <option value="paper">Paper</option>
+                                <option value="lit-review">Lit review</option>
+                            </select>
+                        </div>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item"><input type="checkbox" name="task_mode"> Task mode (executor vote + work/review loop instead of Round 3)</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="rf-timeout">Round timeout (seconds)</label>
+                            <input id="rf-timeout" type="number" name="round_timeout" value="1200" min="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="rf-urls">Evidence URLs (one per line)</label>
+                            <textarea id="rf-urls" name="evidence_urls" placeholder="https://..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="rf-files">Evidence files</label>
+                            <input id="rf-files" type="file" name="evidence_files" multiple>
+                        </div>
+                        <div id="run-form-error"></div>
+                        <button type="submit" class="btn btn-primary">Start Council Run</button>
+                    </form>
+                </div>`;
+
+            $('#run-form').addEventListener('submit', onSubmitRunForm);
+            $('#toggle-add-agent').addEventListener('click', toggleAddAgentPanel);
+        }
+
+        function toggleAddAgentPanel() {
+            const panel = $('#add-agent-panel');
+            if (panel.style.display !== 'none') {
+                panel.style.display = 'none';
+                panel.innerHTML = '';
+                return;
+            }
+            panel.style.display = 'block';
+            panel.innerHTML = `
+                <form id="add-agent-form" class="run-form" style="border:1px solid #e0e4e8;border-radius:8px;padding:14px;margin-top:8px;">
+                    <div class="form-group">
+                        <label for="aa-kind">Kind</label>
+                        <select id="aa-kind">
+                            <option value="cli">CLI</option>
+                            <option value="openai">OpenAI-compatible API</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="aa-id">Id (used for selection, e.g. "mycli")</label>
+                        <input id="aa-id" required placeholder="mycli">
+                    </div>
+                    <div class="form-group">
+                        <label for="aa-name">Display name (optional)</label>
+                        <input id="aa-name" placeholder="My CLI">
+                    </div>
+                    <div class="form-group" data-kind-field="cli">
+                        <label for="aa-command">Command (must include {prompt})</label>
+                        <input id="aa-command" placeholder="mycli --flag {prompt}">
+                    </div>
+                    <div class="form-group" data-kind-field="openai" style="display:none;">
+                        <label for="aa-model">Model</label>
+                        <input id="aa-model" placeholder="gpt-5">
+                    </div>
+                    <div class="form-group" data-kind-field="openai" style="display:none;">
+                        <label for="aa-api-key-env">API key env var (optional, default OPENAI_API_KEY)</label>
+                        <input id="aa-api-key-env" placeholder="OPENAI_API_KEY">
+                    </div>
+                    <div class="form-group">
+                        <label for="aa-aliases">Aliases (comma-separated, optional)</label>
+                        <input id="aa-aliases" placeholder="my-cli, mc">
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item"><input type="checkbox" id="aa-is-default" checked> Include in the default council</label>
+                    </div>
+                    <div id="add-agent-error"></div>
+                    <div style="display:flex;gap:8px;">
+                        <button type="submit" class="btn btn-primary">Add agent</button>
+                        <button type="button" class="btn btn-secondary" id="cancel-add-agent">Cancel</button>
+                    </div>
+                </form>`;
+
+            const kindSelect = $('#aa-kind');
+            kindSelect.addEventListener('change', () => {
+                const isCli = kindSelect.value === 'cli';
+                $all('[data-kind-field="cli"]', panel).forEach((el) => { el.style.display = isCli ? '' : 'none'; });
+                $all('[data-kind-field="openai"]', panel).forEach((el) => { el.style.display = isCli ? 'none' : ''; });
+            });
+            $('#cancel-add-agent').addEventListener('click', () => {
+                panel.style.display = 'none';
+                panel.innerHTML = '';
+            });
+            $('#add-agent-form').addEventListener('submit', onSubmitAddAgent);
+        }
+
+        async function onSubmitAddAgent(e) {
+            e.preventDefault();
+            const form = e.target;
+            const errorBox = $('#add-agent-error');
+            errorBox.innerHTML = '';
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+
+            // Read by element id, not form.<name> — a field named "id" would
+            // otherwise be shadowed by HTMLFormElement's own built-in .id
+            // property (the form tag's own DOM id, not the input's value).
+            const fd = new FormData();
+            fd.append('kind', $('#aa-kind').value);
+            fd.append('id', $('#aa-id').value);
+            fd.append('name', $('#aa-name').value);
+            fd.append('command', $('#aa-command').value);
+            fd.append('model', $('#aa-model').value);
+            fd.append('api_key_env', $('#aa-api-key-env').value);
+            fd.append('aliases', $('#aa-aliases').value);
+            fd.append('is_default', $('#aa-is-default').checked ? 'true' : 'false');
+
+            try {
+                const resp = await fetch('/api/agents', { method: 'POST', body: fd });
+                if (!resp.ok) {
+                    let detail = resp.statusText;
+                    try {
+                        const body = await resp.json();
+                        detail = body.detail || detail;
+                    } catch { /* not JSON */ }
+                    throw new Error(detail);
+                }
+                // Full re-render: simplest way to get the new agent into the
+                // checkbox list without hand-rolling a partial DOM patch.
+                await showRunForm();
+            } catch (err) {
+                errorBox.innerHTML = `<div class="banner banner-error">${esc(err.message)}</div>`;
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function onSubmitRunForm(e) {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const errorBox = $('#run-form-error');
+            errorBox.innerHTML = '';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Starting...';
+
+            const fd = new FormData();
+            fd.append('task', form.task.value);
+            const selectedAgents = $all('input[name="agent"]:checked', form).map((el) => el.value);
+            fd.append('agents', selectedAgents.join(','));
+            if (form.preset.value) fd.append('preset', form.preset.value);
+            fd.append('task_mode', form.task_mode.checked ? 'true' : 'false');
+            fd.append('round_timeout', form.round_timeout.value || '1200');
+            fd.append('evidence_urls', form.evidence_urls.value);
+            for (const file of form.evidence_files.files) fd.append('evidence_files', file);
+
+            try {
+                const resp = await fetch('/api/council/start', { method: 'POST', body: fd });
+                if (!resp.ok) {
+                    let detail = resp.statusText;
+                    try {
+                        const body = await resp.json();
+                        detail = body.detail || detail;
+                    } catch { /* not JSON */ }
+                    throw new Error(detail);
+                }
+                const data = await resp.json();
+                openLiveView(data.session_id, { taskMode: form.task_mode.checked });
+                loadSessions();
+            } catch (err) {
+                errorBox.innerHTML = `<div class="banner banner-error">${esc(err.message)}</div>`;
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Council Run';
+            }
+        }
+
+        // --- Live run view (WebSocket-driven) ---
+        const STAGE_LABELS = {
+            round1: 'R1 Analysis', round2: 'R2 Critique', round3: 'R3 Round', task: 'Work + Review',
+        };
+        const CELL_GLYPH = { running: '●', done: '✓', error: '✗', timeout: '⏱' };
+        const CELL_CLASS = { running: 'grid-cell-running', done: 'grid-cell-done', error: 'grid-cell-error', timeout: 'grid-cell-timeout' };
+
+        function openLiveView(sessionId, opts) {
+            const taskMode = !!(opts && opts.taskMode);
+            const columns = taskMode ? ['round1', 'round2', 'task'] : ['round1', 'round2', 'round3'];
+            const panel = $('#detail-panel');
+            panel.innerHTML = `
+                <div class="card-body">
+                    <h2 style="margin:0 0 4px;">${esc(sessionId)} — running</h2>
+                    <div id="live-banner"></div>
+                    <div class="progress-track" style="margin:12px 0 4px;">
+                        <div class="progress-fill" id="live-progress-fill"></div>
+                    </div>
+                    <div id="live-progress-label" style="font-size:0.8125rem;color:#6b7280;margin-bottom:16px;">Starting…</div>
+                    <table class="status-grid">
+                        <thead><tr><th>Agent</th>${columns.map((c) => `<th>${esc(STAGE_LABELS[c] || c)}</th>`).join('')}</tr></thead>
+                        <tbody id="live-grid-body"></tbody>
+                    </table>
+                    <h3 style="margin:20px 0 8px;font-size:0.875rem;color:#374151;">Log</h3>
+                    <div class="log-panel" id="live-log"></div>
+                </div>`;
+
+            const rows = new Map();
+            const gridBody = $('#live-grid-body');
+            const logPanel = $('#live-log');
+            const progressFill = $('#live-progress-fill');
+            const progressLabel = $('#live-progress-label');
+            const banner = $('#live-banner');
+
+            function ensureRow(agent) {
+                if (rows.has(agent)) return rows.get(agent);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="grid-agent">${esc(agent)}</td>${columns.map((c) => `<td data-col="${c}">—</td>`).join('')}`;
+                gridBody.appendChild(tr);
+                const cells = {};
+                columns.forEach((c) => { cells[c] = tr.querySelector(`td[data-col="${c}"]`); });
+                const row = { tr, cells };
+                rows.set(agent, row);
+                return row;
+            }
+
+            let finished = false;
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            const ws = new WebSocket(`${proto}://${location.host}/ws/${encodeURIComponent(sessionId)}`);
+
+            ws.addEventListener('message', (ev) => {
+                let msg;
+                try { msg = JSON.parse(ev.data); } catch { return; }
+
+                if (msg.type === 'agent_status') {
+                    const row = ensureRow(msg.agent);
+                    const col = columns.includes(msg.stage) ? msg.stage : (taskMode ? 'task' : null);
+                    const cell = col ? row.cells[col] : null;
+                    if (cell) {
+                        cell.textContent = `${CELL_GLYPH[msg.status] || msg.status} ${msg.detail || ''}`.trim();
+                        cell.className = CELL_CLASS[msg.status] || '';
+                    }
+                } else if (msg.type === 'progress') {
+                    const pct = msg.total > 0 ? Math.min(100, Math.round((msg.done / msg.total) * 100)) : 0;
+                    progressFill.style.width = pct + '%';
+                    progressLabel.textContent = `${msg.done}/${msg.total} agent calls (${pct}%) · ${msg.elapsed}`;
+                } else if (msg.type === 'log') {
+                    logPanel.textContent += msg.line + '\n';
+                    logPanel.scrollTop = logPanel.scrollHeight;
+                } else if (msg.type === 'finished') {
+                    finished = true;
+                    loadSessions(sessionId);
+                } else if (msg.type === 'error') {
+                    finished = true;
+                    banner.innerHTML = `<div class="banner banner-error">Run failed: ${esc(msg.message)}</div>`;
+                    loadSessions();
+                }
+            });
+
+            ws.addEventListener('close', () => {
+                if (!finished) {
+                    banner.innerHTML = '<div class="banner banner-error">Connection to the server was lost. Refresh to check whether the run is still active.</div>';
+                }
+            });
+        }
+
+        $('#btn-new-run').addEventListener('click', showRunForm);
+        $('#btn-refresh').addEventListener('click', () => loadSessions());
+
+        loadSessions();
+    </script>
+</body>
+</html>
