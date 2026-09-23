@@ -72,7 +72,7 @@ class TestTty:
         out = stream.getvalue()
         assert "думаю" in out
         assert "⠋" in out  # первый кадр braille-анимации
-        assert "(0с)" in out  # таймер секунд
+        assert "(0s)" in out  # таймер секунд
         assert out.endswith("\r")  # при остановке строка затирается
 
     def test_update_changes_rendered_text(self):

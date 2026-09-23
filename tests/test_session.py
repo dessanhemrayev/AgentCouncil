@@ -1,12 +1,22 @@
 """Tests for src/session.py — writing council moves to disk (sessions/run-NNN/...)."""
 
+import io
 import json
 from pathlib import Path
 
 import pytest
 
 from src.core.models import AgentResult
-from src.core.session import SessionWriter, next_session_dir, slugify
+from src.core.session import SessionTee, SessionWriter, next_session_dir, slugify
+
+
+def test_session_tee_preserves_terminal_detection():
+    class TtyStream(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    assert SessionTee(TtyStream(), object()).isatty() is True
+    assert SessionTee(io.StringIO(), object()).isatty() is False
 
 
 @pytest.fixture

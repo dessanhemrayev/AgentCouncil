@@ -8,7 +8,10 @@ attaching those formats through the GUI impossible even though the CLI path
 """
 
 import queue
+import sys
 from types import SimpleNamespace
+
+import pytest
 
 from src.gui.worker import CouncilWorker
 
@@ -86,3 +89,32 @@ def test_missing_evidence_file_is_skipped_not_fatal(tmp_path, monkeypatch):
 
     assert not (session.dir / "evidence" / "gone.docx").exists()
     assert finished == [session.dir]
+
+
+@pytest.mark.parametrize("failure", ["create", "write"])
+def test_session_setup_failure_schedules_completion_and_restores_streams(
+    tmp_path, monkeypatch, failure
+):
+    class FailingSession(_FakeSession):
+        def write_idea(self, idea):
+            raise OSError("cannot save idea")
+
+    def create_session():
+        if failure == "create":
+            raise OSError("cannot create session")
+        return FailingSession(tmp_path)
+
+    monkeypatch.setattr("src.core.session.SessionWriter", create_session)
+    finished = []
+    worker = CouncilWorker(
+        queue.Queue(),
+        on_status=lambda *args: None,
+        on_finished=finished.append,
+    )
+    stdout, stderr = sys.stdout, sys.stderr
+
+    worker.run(_make_gui(tmp_path, []), "task", agents=[])
+
+    assert finished == [None]
+    assert sys.stdout is stdout
+    assert sys.stderr is stderr

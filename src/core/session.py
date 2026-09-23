@@ -234,3 +234,6 @@ class SessionTee(io.TextIOBase):
 
     def flush(self) -> None:
         self._stream.flush()
+
+    def isatty(self) -> bool:
+        return self._stream.isatty()

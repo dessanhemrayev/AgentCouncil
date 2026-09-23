@@ -65,16 +65,16 @@ class CouncilWorker:
         from ..core.orchestrator import run_council_async
         from ..core.session import SessionWriter
 
-        session = SessionWriter()
-        session.write_idea(task)
-        queue_writer = QueueWriter(
-            self._log_queue, getattr(session, "write_console", None)
-        )
         old_stdout, old_stderr = sys.stdout, sys.stderr
-        setattr(sys, "stdout", queue_writer)
-        setattr(sys, "stderr", queue_writer)
-
         try:
+            session = SessionWriter()
+            session.write_idea(task)
+            queue_writer = QueueWriter(
+                self._log_queue, getattr(session, "write_console", None)
+            )
+            setattr(sys, "stdout", queue_writer)
+            setattr(sys, "stderr", queue_writer)
+
             evidence_dir = None
             if gui.evidence_files:
                 evidence_dir = session.dir / "evidence"

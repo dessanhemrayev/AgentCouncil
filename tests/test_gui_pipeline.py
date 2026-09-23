@@ -46,16 +46,16 @@ def gui(ctk_root):
 
 class TestStageDisplayName:
     def test_static_stages(self):
-        assert pipeline.stage_display_name("round1") == "R1 Анализ"
-        assert pipeline.stage_display_name("round3") == "R3 Раунд"
-        assert pipeline.stage_display_name("vote") == "Голосование"
+        assert pipeline.stage_display_name("round1") == "R1 Analysis"
+        assert pipeline.stage_display_name("round3") == "R3 Round"
+        assert pipeline.stage_display_name("vote") == "Voting"
 
     def test_task_stage(self):
-        assert pipeline.stage_display_name("task") == "Работа+Ревью"
+        assert pipeline.stage_display_name("task") == "Work + Review"
 
     def test_dynamic_review_and_fix_stages(self):
-        assert pipeline.stage_display_name("task-review-2") == "Ревью №2"
-        assert pipeline.stage_display_name("task-fix-1") == "Правка №1"
+        assert pipeline.stage_display_name("task-review-2") == "Review No. 2"
+        assert pipeline.stage_display_name("task-fix-1") == "Fix No. 1"
 
 
 class TestMatrix:

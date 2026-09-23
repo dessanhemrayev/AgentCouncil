@@ -439,7 +439,7 @@ def print_results(results: Dict[str, AgentResult], show_json: bool = False) -> N
                 logger.info("%s", result.output)
             continue
 
-            logger.info("%s", result.output)
+        logger.info("%s", result.output)
 
         if show_json:
             parsed = extract_json_block(result.output)
