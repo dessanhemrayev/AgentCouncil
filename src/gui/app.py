@@ -42,7 +42,7 @@ class CouncilGUI:
 
     def __init__(self, root: ctk.CTk):
         self.root = root
-        self.language = "ru"
+        self.language = "en"
         self.language_var: ctk.StringVar
         self.theme_var: ctk.StringVar
         self.sidebar_header_subtitle: ctk.CTkLabel
@@ -132,7 +132,7 @@ class CouncilGUI:
         if language not in SUPPORTED_LANGUAGES:
             language = next(
                 (code for code, label in LANGUAGE_LABELS.items() if label == language),
-                "ru",
+                "en",
             )
         self.language = language
         if hasattr(self, "language_var"):

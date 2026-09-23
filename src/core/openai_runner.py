@@ -35,7 +35,7 @@ class OpenAIResponsesRunner:
             if on_status is not None:
                 on_status(name, "error")
             return AgentResult(
-                name=name, error="Не задана модель ('model') у openai-участника."
+                name=name, error="No model ('model') configured for the OpenAI member."
             )
 
         if on_status is not None:
@@ -65,4 +65,4 @@ class OpenAIResponsesRunner:
 
         if on_status is not None:
             on_status(name, "done")
-        return AgentResult(name=name, output=output or "Пустой ответ от агента.")
+        return AgentResult(name=name, output=output or "Empty response from agent.")

@@ -173,8 +173,8 @@ TRANSLATIONS = {
 
 
 def translate(language: str, key: str, **values: Any) -> str:
-    """Return a localized string, falling back to Russian for unknown languages."""
+    """Return a localized string, falling back to English for unknown languages."""
     if language not in TRANSLATIONS:
-        language = "ru"
-    template = TRANSLATIONS[language].get(key, TRANSLATIONS["ru"].get(key, key))
+        language = "en"
+    template = TRANSLATIONS[language].get(key, TRANSLATIONS["en"].get(key, key))
     return template.format(**values)

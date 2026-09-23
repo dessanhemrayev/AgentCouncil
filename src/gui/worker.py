@@ -15,12 +15,16 @@ from pathlib import Path
 from typing import List
 
 from src.core.models import CouncilMember
+from src.core.logging_utils import get_logger
 from src.core.web_utils import fetch_url, is_url, save_fetched_evidence
+
+logger = get_logger("gui.worker")
 
 
 class QueueWriter(io.TextIOBase):
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: "queue.Queue[str]", on_line=None):
         self._q = q
+        self._on_line = on_line
         self._buffer = ""
 
     def write(self, s: str) -> int:
@@ -28,6 +32,8 @@ class QueueWriter(io.TextIOBase):
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             self._q.put(line)
+            if self._on_line is not None:
+                self._on_line(line)
         return len(s)
 
     def flush(self) -> None:
@@ -59,14 +65,15 @@ class CouncilWorker:
         from ..core.orchestrator import run_council_async
         from ..core.session import SessionWriter
 
-        queue_writer = QueueWriter(self._log_queue)
         old_stdout, old_stderr = sys.stdout, sys.stderr
-        setattr(sys, "stdout", queue_writer)
-        setattr(sys, "stderr", queue_writer)
-
         try:
             session = SessionWriter()
             session.write_idea(task)
+            queue_writer = QueueWriter(
+                self._log_queue, getattr(session, "write_console", None)
+            )
+            setattr(sys, "stdout", queue_writer)
+            setattr(sys, "stderr", queue_writer)
 
             evidence_dir = None
             if gui.evidence_files:
@@ -75,15 +82,19 @@ class CouncilWorker:
                 for ev_item in gui.evidence_files:
                     if is_url(ev_item):
                         # Fetch URL and save as evidence
-                        print(f"Fetching evidence from URL: {ev_item}")
+                        logger.info("Fetching evidence from URL: %s", ev_item)
                         try:
                             content, content_type = fetch_url(ev_item)
                             saved_path = save_fetched_evidence(
                                 evidence_dir, ev_item, content, content_type
                             )
-                            print(f"  Evidence: {ev_item} -> {saved_path.name}")
+                            logger.info(
+                                "  Evidence: %s -> %s", ev_item, saved_path.name
+                            )
                         except Exception as exc:
-                            print(gui.tr("skip_evidence", name=ev_item, error=exc))
+                            logger.warning(
+                                gui.tr("skip_evidence", name=ev_item, error=exc)
+                            )
                             continue
                     else:
                         src_path = Path(ev_item)
@@ -91,7 +102,7 @@ class CouncilWorker:
                             data = src_path.read_bytes()
                         except OSError as exc:
                             # A missing/unreadable file must not crash the run — skip with a log entry.
-                            print(
+                            logger.warning(
                                 gui.tr("skip_evidence", name=src_path.name, error=exc)
                             )
                             continue
@@ -112,7 +123,7 @@ class CouncilWorker:
                 round_timeout = max(1, int(gui.round_timeout_var.get()))
             except (TypeError, ValueError):
                 round_timeout = 1200
-                print(
+                logger.warning(
                     gui.tr(
                         "invalid_timeout",
                         value=gui.round_timeout_var.get(),
@@ -139,7 +150,7 @@ class CouncilWorker:
             gui.root.after(0, self._on_finished, session.dir)
 
         except Exception as exc:
-            print(gui.tr("worker_error", error=exc))
+            logger.error(gui.tr("worker_error", error=exc))
             gui.root.after(0, self._on_finished, None)
         finally:
             sys.stdout, sys.stderr = old_stdout, old_stderr

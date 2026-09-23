@@ -4,10 +4,10 @@ version = "0.0.1"
 description = "A multi-agent deliberation framework where autonomous AI agents independently analyze, challenge, and refine ideas."
 readme = "README.md"
 requires-python = ">=3.13"
-# Core (CLI + council engine) is stdlib-only — zero runtime dependencies.
-# The GUI is an opt-in extra: `uv sync --extra gui` (customtkinter pulls
-# tkinter at import time, and not every uv-managed interpreter bundles it).
-dependencies = []
+# Runtime dependency for terminal animation; the GUI remains opt-in.
+dependencies = [
+    "yaspin>=3.5.1",
+]
 
 # No [project.scripts]: this project isn't packaged (no [build-system] — see
 # the note above about staying stdlib-only/run-in-place), so `uv sync` never

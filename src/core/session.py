@@ -1,7 +1,9 @@
+import io
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TextIO
 
 from .models import AgentResult
 
@@ -42,6 +44,7 @@ class SessionWriter:
       round2/claude-code.json      (structured part, if it parsed)
       round3/claude-code.md
       vote.json
+    events.jsonl
     """
 
     def __init__(self, base: Optional[Path] = None):
@@ -143,6 +146,21 @@ class SessionWriter:
             encoding="utf-8",
         )
 
+    def write_event(self, event: str, **data: object) -> None:
+        """Append one timestamped machine-readable event to the run journal."""
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": event,
+            **data,
+        }
+        with (self.dir / "events.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+    def write_console(self, line: str) -> None:
+        """Append one exact stdout/stderr line to the session console log."""
+        with (self.dir / "console.log").open("a", encoding="utf-8") as stream:
+            stream.write(line + "\n")
+
     def write_vote_trajectory(self, trajectory: dict) -> None:
         """Per-agent R2 -> R3 score trajectory (council.compute_vote_trajectory).
         Separate from vote.json — different semantics (dynamics, not the final)."""
@@ -195,3 +213,27 @@ class SessionWriter:
         (self.dir / "task_verdict.json").write_text(
             json.dumps(task_out, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+
+class SessionTee(io.TextIOBase):
+    """Mirror console output to its original stream and the session log."""
+
+    def __init__(self, stream: TextIO, session: SessionWriter):
+        self._stream = stream
+        self._write_console = getattr(session, "write_console", None)
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        self._stream.write(text)
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if self._write_console is not None:
+                self._write_console(line)
+        return len(text)
+
+    def flush(self) -> None:
+        self._stream.flush()
+
+    def isatty(self) -> bool:
+        return self._stream.isatty()

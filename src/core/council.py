@@ -335,7 +335,7 @@ async def run_round3(
         # keep text AND file versions — the next turn's mode depends on
         # accumulated size, unknown in advance.
         history_text[name] = (
-            result.output if ok(result) else f"[нет ответа: {result.error}]"
+            result.output if ok(result) else f"[no response: {result.error}]"
         )
         history_paths[name] = written_path
 

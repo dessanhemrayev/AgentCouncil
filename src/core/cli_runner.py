@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from ..config.agents import AGENTS_WITHOUT_FILE_SUPPORT
+from .logging_utils import get_logger
 from .models import (
     KIND_CLI,
     KIND_OPENAI,
@@ -24,6 +25,8 @@ from .models import (
     RunContext,
     Runner,
 )
+
+logger = get_logger("core.cli_runner")
 
 # Prompt-length limits for the command line, per executable kind:
 # .cmd/.bat (npm CLIs) go through cmd.exe (~8191 chars), raw .exe
@@ -84,7 +87,7 @@ class CliRunner:
         timeout = ctx.timeout
 
         if not command:
-            return AgentResult(name=name, error="Не задана команда.")
+            return AgentResult(name=name, error="No command configured.")
 
         if on_status is not None:
             on_status(name, "running")
@@ -97,8 +100,8 @@ class CliRunner:
             return AgentResult(
                 name=name,
                 error=(
-                    f"Команда не найдена: {command[0]}. "
-                    "Проверьте, что агент установлен и доступен в PATH."
+                    f"Command not found: {command[0]}. "
+                    "Make sure the agent is installed and available in PATH."
                 ),
             )
 
@@ -106,10 +109,12 @@ class CliRunner:
         max_arg_prompt_length = _max_arg_prompt_length(executable)
 
         if len(prompt) > max_arg_prompt_length:
-            print(
-                f"[cli_runner] {name}: prompt length {len(prompt)} exceeds "
-                f"threshold {max_arg_prompt_length} for {executable}",
-                file=sys.stderr,
+            logger.warning(
+                "[cli_runner] %s: prompt length %s exceeds threshold %s for %s",
+                name,
+                len(prompt),
+                max_arg_prompt_length,
+                executable,
             )
 
         if has_placeholder and len(prompt) <= max_arg_prompt_length:
@@ -135,15 +140,14 @@ class CliRunner:
                 cmd = [item.replace("{prompt}", f"@{prompt_file}") for item in command]
                 stdin_data = None
 
-                print(
-                    f"[cli_runner] {name}: using file fallback @{prompt_file}",
-                    file=sys.stderr,
+                logger.info(
+                    "[cli_runner] %s: using file fallback @%s", name, prompt_file
                 )
             except Exception as exc:  # noqa: BLE001 — any fallback failure must degrade to stdin, not crash the round
-                print(
-                    f"[cli_runner] {name}: file fallback failed ({exc}), "
-                    f"falling back to stdin",
-                    file=sys.stderr,
+                logger.warning(
+                    "[cli_runner] %s: file fallback failed (%s), falling back to stdin",
+                    name,
+                    exc,
                 )
                 cmd = [item for item in command if "{prompt}" not in item]
                 stdin_data = prompt.encode("utf-8")
@@ -190,7 +194,7 @@ class CliRunner:
                     on_status(name, "timeout")
                 return AgentResult(
                     name=name,
-                    error=f"Таймаут: агент не ответил за {timeout} сек.",
+                    error=f"Timeout: agent did not respond within {timeout} sec.",
                 )
 
             stdout_text = stdout.decode("utf-8", errors="replace").strip()
@@ -202,7 +206,7 @@ class CliRunner:
                 return AgentResult(
                     name=name,
                     output=stdout_text,
-                    error=stderr_text or f"Код возврата: {process.returncode}.",
+                    error=stderr_text or f"Exit code: {process.returncode}.",
                 )
 
             if not stdout_text and stderr_text:
@@ -217,7 +221,7 @@ class CliRunner:
                 on_status(name, "done")
             return AgentResult(
                 name=name,
-                output=stdout_text or "Пустой ответ от агента.",
+                output=stdout_text or "Empty response from agent.",
             )
 
         except Exception as exc:  # noqa: BLE001 — any delivery failure must become an AgentResult error, not a crashed round

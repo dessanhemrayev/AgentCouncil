@@ -2,8 +2,10 @@
 
 import io
 import time
+from pathlib import Path
 
 import pytest
+import tomllib
 
 from src.cli.spinner import Spinner
 
@@ -13,6 +15,14 @@ class FakeTty(io.StringIO):
 
     def isatty(self) -> bool:
         return True
+
+
+class TestDependency:
+    def test_project_declares_yaspin_dependency(self):
+        pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+        deps = pyproject["project"]["dependencies"]
+
+        assert any(dep.startswith("yaspin") for dep in deps)
 
 
 class TestNonTty:
@@ -62,7 +72,7 @@ class TestTty:
         out = stream.getvalue()
         assert "думаю" in out
         assert "⠋" in out  # первый кадр braille-анимации
-        assert "(0с)" in out  # таймер секунд
+        assert "(0s)" in out  # таймер секунд
         assert out.endswith("\r")  # при остановке строка затирается
 
     def test_update_changes_rendered_text(self):
