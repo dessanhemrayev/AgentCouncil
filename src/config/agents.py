@@ -4,6 +4,9 @@ from typing import cast
 from pathlib import Path
 
 from src.core.models import KIND_CLI, KIND_OPENAI, CouncilMember, MemberKind
+from src.core.logging_utils import get_logger
+
+logger = get_logger("config.agents")
 
 Agent = tuple[str, list[str]]
 
@@ -181,14 +184,14 @@ def build_roster(
     if members_raw is None:
         members_raw = []
     if not isinstance(members_raw, list):
-        print("Warning: council.json 'members' must be a list; ignoring it.")
+        logger.warning("Warning: council.json 'members' must be a list; ignoring it.")
         members_raw = []
 
     for index, entry in enumerate(members_raw):
         try:
             member = member_from_config(entry)
         except (TypeError, ValueError) as exc:
-            print(f"Warning: council.json members[{index}] skipped: {exc}")
+            logger.warning("Warning: council.json members[%s] skipped: %s", index, exc)
             continue
         roster.append(member)
         taken.add(member.id.lower())
@@ -196,9 +199,11 @@ def build_roster(
     for agent in discovered or []:
         candidate = member_from_agent(agent)
         if candidate.id.lower() in taken:
-            print(
-                f"Warning: discovered agent {candidate.name!r} ({candidate.id}) is "
-                "already in council.json members; the configured member wins."
+            logger.warning(
+                "Warning: discovered agent %r (%s) is already in council.json members; "
+                "the configured member wins.",
+                candidate.name,
+                candidate.id,
             )
             continue
         roster.append(candidate)
@@ -240,7 +245,7 @@ def select_members(
                 continue
             matched.update(t.lower() for t in hit)
             if not member.enabled:
-                print(
+                logger.warning(
                     f"Warning: agent {member.name!r} is disabled in "
                     "council.json; skipped."
                 )
@@ -250,9 +255,9 @@ def select_members(
                 selected_ids.add(member.id.lower())
         unknown = [tok for tok in requested if tok.lower() not in matched]
         if unknown:
-            print(f"Warning: unknown agents ignored: {', '.join(unknown)}.")
+            logger.warning("Warning: unknown agents ignored: %s.", ", ".join(unknown))
         if not selected:
-            print(
+            logger.warning(
                 f"Warning: none of the requested agents ({agent_names}) were found. Using all available."
             )
             return list(members)
@@ -263,9 +268,10 @@ def select_members(
         if not member.enabled or not member.is_default:
             continue
         if not member_available(member):
-            print(
-                f"Warning: default member {member.name!r} ({member.id}) is not "
-                "available (not on PATH); skipped."
+            logger.warning(
+                "Warning: default member %r (%s) is not available (not on PATH); skipped.",
+                member.name,
+                member.id,
             )
             continue
         defaults.append(member)
@@ -276,7 +282,9 @@ def select_members(
     if not isinstance(default_ids, list) or not all(
         isinstance(item, str) for item in default_ids
     ):
-        print("Warning: council.json 'default_members' must be a list of ids; ignored.")
+        logger.warning(
+            "Warning: council.json 'default_members' must be a list of ids; ignored."
+        )
         return defaults
 
     by_id = {member.id.lower(): member for member in defaults}
@@ -292,7 +300,9 @@ def select_members(
             ordered.append(pick)
             ordered_ids.add(pick.id.lower())
     if missing:
-        print(f"Warning: default_members absent from the roster: {', '.join(missing)}.")
+        logger.warning(
+            "Warning: default_members absent from the roster: %s.", ", ".join(missing)
+        )
     return ordered
 
 

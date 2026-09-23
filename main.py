@@ -182,19 +182,28 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
     if args.list_agents:
         roster = build_roster(config, found)
         if roster:
-            print("Council roster (council.json members + discovered CLI agents):")
+            logger.info(
+                "Council roster (council.json members + discovered CLI agents):"
+            )
             for member in roster:
                 if member.kind == KIND_OPENAI:
                     key = "KEY OK" if os.environ.get(member.api_key_env) else "NO KEY"
-                    print(f"  - {member.name} [openai] model={member.model}, {key}")
+                    logger.info(
+                        "  - %s [openai] model=%s, %s",
+                        member.name,
+                        member.model,
+                        key,
+                    )
                 else:
                     state = "available" if member_available(member) else "not on PATH"
-                    print(
-                        f"  - {member.name} [cli] ({' '.join(member.command or [])})"
-                        f" — {state}"
+                    logger.info(
+                        "  - %s [cli] (%s) — %s",
+                        member.name,
+                        " ".join(member.command or []),
+                        state,
                     )
         else:
-            print("No agents discovered or configured.")
+            logger.info("No agents discovered or configured.")
         return 0
 
     # --task carries the task; --idea/@file is optional extra context.
@@ -209,19 +218,19 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
             else:
                 idea = raw
         if not idea:
-            print("Error: empty task (--task requires text or @file).")
+            logger.error("Error: empty task (--task requires text or @file).")
             return 1
     else:
         idea = read_idea_from_source(args)
         if not idea and not args.gui:
-            print(
+            logger.error(
                 "Error: no idea provided. Use positional argument, --idea @file, or pipe to stdin."
             )
             return 1
 
     roster = build_roster(config, found)
     if not roster:
-        print(
+        logger.error(
             "Error: no agents discovered or configured. Make sure CLI agents"
             " (claude, codex, gemini, hermes, pi, dsh) are installed and in PATH,"
             " or add members to council.json."
@@ -231,11 +240,13 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
     council = select_members(roster, args.agents, config)
 
     if not council:
-        print("Error: no agents selected.")
+        logger.error("Error: no agents selected.")
         return 1
 
     if task_mode and len(council) < 2:
-        print("Error: task mode requires at least 2 agents (executor + 1 reviewer).")
+        logger.error(
+            "Error: task mode requires at least 2 agents (executor + 1 reviewer)."
+        )
         return 1
 
     quick_mode = args.quick or config.get("mode") == "quick"
@@ -254,16 +265,16 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
     if quick_mode and len(council) > 2:
         dropped = [member.name for member in council[2:]]
         council = council[:2]
-        print(
+        logger.info(
             f"Quick mode: using only 2 agents ({', '.join(m.name for m in council)}); skipped: {', '.join(dropped)} (use --full for all agents)."
         )
 
-    print(f"Council participants: {', '.join(m.name for m in council)}")
+    logger.info("Council participants: %s", ", ".join(m.name for m in council))
 
     output_dir = Path(args.output_dir) if args.output_dir else None
     session = SessionWriter(output_dir)
     session.write_idea(idea)
-    print(f"Session saved to: {session.dir}")
+    logger.info("Session saved to: %s", session.dir)
 
     evidence_dir: Optional[Path] = None
     if args.evidence:
@@ -272,23 +283,23 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
         for ev_item in args.evidence:
             if is_url(ev_item):
                 # Fetch URL and save as evidence
-                print(f"  Fetching evidence from URL: {ev_item}")
+                logger.info("  Fetching evidence from URL: %s", ev_item)
                 try:
                     content, content_type = fetch_url(ev_item)
                     saved_path = save_fetched_evidence(
                         evidence_dir, ev_item, content, content_type
                     )
-                    print(f"  Evidence: {ev_item} -> {saved_path.name}")
+                    logger.info("  Evidence: %s -> %s", ev_item, saved_path.name)
                 except Exception as exc:
-                    print(f"  Warning: failed to fetch {ev_item}: {exc}")
+                    logger.warning("  Warning: failed to fetch %s: %s", ev_item, exc)
             else:
                 src = Path(ev_item)
                 if src.exists():
                     dst = evidence_dir / src.name
                     dst.write_bytes(src.read_bytes())
-                    print(f"  Evidence: {src.name} -> {dst}")
+                    logger.info("  Evidence: %s -> %s", src.name, dst)
                 else:
-                    print(f"  Warning: evidence file not found: {ev_item}")
+                    logger.warning("  Warning: evidence file not found: %s", ev_item)
 
     max_reviews = (
         args.max_reviews
@@ -342,9 +353,9 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
 
 def ask_agents_manually() -> List[Agent]:
     """Lets the user manually add agents the program did not discover on its own."""
-    print("Add an agent manually")
-    print("For each one — a name and the command used to run it (e.g.: claude).")
-    print("Empty name — finish input.\n")
+    logger.info("Add an agent manually")
+    logger.info("For each one — a name and the command used to run it (e.g.: claude).")
+    logger.info("Empty name — finish input.\n")
 
     agents: List[Agent] = []
 
@@ -355,20 +366,20 @@ def ask_agents_manually() -> List[Agent]:
 
         command_str = input(f"  Command to run '{name}': ").strip()
         if not command_str:
-            print("  No command given, agent skipped.\n")
+            logger.warning("  No command given, agent skipped.\n")
             continue
 
         command = command_str.split()
 
         if not check_agent_available(command):
-            print(f"  Warning: command '{command[0]}' was not found in PATH.")
+            logger.warning("  Warning: command '%s' was not found in PATH.", command[0])
             confirm = input("  Add the agent anyway? (y/N): ").strip().lower()
             if confirm != "y":
-                print("  Agent skipped.\n")
+                logger.info("  Agent skipped.\n")
                 continue
 
         agents.append((name, command))
-        print(f"  Agent '{name}' added.\n")
+        logger.info("  Agent '%s' added.\n", name)
 
     return agents
 
@@ -378,9 +389,9 @@ def choose_agents(candidates: List[Agent]) -> List[Agent]:
     if not candidates:
         return []
 
-    print("Which agents should take part in the council?")
+    logger.info("Which agents should take part in the council?")
     for i, (name, command) in enumerate(candidates, start=1):
-        print(f"  {i}. {name} ({' '.join(command)})")
+        logger.info("  %s. %s (%s)", i, name, " ".join(command))
 
     selection = input(
         "\nEnter numbers separated by commas (e.g.: 1,3) or Enter — use all: "
@@ -435,52 +446,52 @@ async def main() -> None:
     tests/test_main_flow.py does `from main import main as main_coro`."""
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
-    print("Scanning the system for known AI agents...")
-    print("-" * 40)
+    logger.info("Scanning the system for known AI agents...")
+    logger.info("-" * 40)
 
     found = discover_agents()
 
     if found:
-        print("Agents found:")
+        logger.info("Agents found:")
         for name, command in found:
-            print(f"  - {name} ({' '.join(command)})")
+            logger.info("  - %s (%s)", name, " ".join(command))
     else:
-        print("No agents discovered automatically.")
+        logger.info("No agents discovered automatically.")
 
-    print()
+    logger.info("")
     add_manual = input("Add another agent manually? (y/N): ").strip().lower()
     manual = ask_agents_manually() if add_manual == "y" else []
 
     candidates = found + manual
 
     if not candidates:
-        print("не найдено и не добавлено ни одного агента")
-        print(
+        logger.error("No agents discovered or added.")
+        logger.info(
             "Make sure the agent CLI (claude, codex, gemini, ...) is installed and available in PATH."
         )
         return
 
-    print("-" * 40)
+    logger.info("-" * 40)
     council = choose_agents(candidates)
 
     if not council:
-        print("Error: no agent selected for the council.")
+        logger.error("Error: no agent selected for the council.")
         return
 
-    print("-" * 40)
-    print(f"Council participants: {', '.join(name for name, _ in council)}")
-    print("-" * 40)
+    logger.info("-" * 40)
+    logger.info("Council participants: %s", ", ".join(name for name, _ in council))
+    logger.info("-" * 40)
 
     try:
         idea = input("Describe your idea:\n> ")
     except (EOFError, KeyboardInterrupt):
-        print("\nInput aborted.")
+        logger.warning("\nInput aborted.")
         return
 
     idea = idea.strip()
 
     if not idea:
-        print("Идея пустая. Нечего оценивать.")
+        logger.error("Idea is empty. Nothing to evaluate.")
         return
 
     session = SessionWriter()
@@ -535,7 +546,7 @@ def cli_main() -> None:
         try:
             asyncio.run(main())
         except KeyboardInterrupt:
-            print("\nStopped by user.")
+            logger.warning("\nStopped by user.")
 
 
 if __name__ == "__main__":

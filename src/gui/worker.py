@@ -15,7 +15,10 @@ from pathlib import Path
 from typing import List
 
 from src.core.models import CouncilMember
+from src.core.logging_utils import get_logger
 from src.core.web_utils import fetch_url, is_url, save_fetched_evidence
+
+logger = get_logger("gui.worker")
 
 
 class QueueWriter(io.TextIOBase):
@@ -79,15 +82,19 @@ class CouncilWorker:
                 for ev_item in gui.evidence_files:
                     if is_url(ev_item):
                         # Fetch URL and save as evidence
-                        print(f"Fetching evidence from URL: {ev_item}")
+                        logger.info("Fetching evidence from URL: %s", ev_item)
                         try:
                             content, content_type = fetch_url(ev_item)
                             saved_path = save_fetched_evidence(
                                 evidence_dir, ev_item, content, content_type
                             )
-                            print(f"  Evidence: {ev_item} -> {saved_path.name}")
+                            logger.info(
+                                "  Evidence: %s -> %s", ev_item, saved_path.name
+                            )
                         except Exception as exc:
-                            print(gui.tr("skip_evidence", name=ev_item, error=exc))
+                            logger.warning(
+                                gui.tr("skip_evidence", name=ev_item, error=exc)
+                            )
                             continue
                     else:
                         src_path = Path(ev_item)
@@ -95,7 +102,7 @@ class CouncilWorker:
                             data = src_path.read_bytes()
                         except OSError as exc:
                             # A missing/unreadable file must not crash the run — skip with a log entry.
-                            print(
+                            logger.warning(
                                 gui.tr("skip_evidence", name=src_path.name, error=exc)
                             )
                             continue
@@ -116,7 +123,7 @@ class CouncilWorker:
                 round_timeout = max(1, int(gui.round_timeout_var.get()))
             except (TypeError, ValueError):
                 round_timeout = 1200
-                print(
+                logger.warning(
                     gui.tr(
                         "invalid_timeout",
                         value=gui.round_timeout_var.get(),
@@ -143,7 +150,7 @@ class CouncilWorker:
             gui.root.after(0, self._on_finished, session.dir)
 
         except Exception as exc:
-            print(gui.tr("worker_error", error=exc))
+            logger.error(gui.tr("worker_error", error=exc))
             gui.root.after(0, self._on_finished, None)
         finally:
             sys.stdout, sys.stderr = old_stdout, old_stderr

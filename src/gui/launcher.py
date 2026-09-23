@@ -11,6 +11,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from ..core.logging_utils import get_logger
+
+logger = get_logger("gui.launcher")
+
 
 def _find_interpreter_with_tkinter() -> Optional[str]:
     """Finds a Python interpreter with working tkinter via the Windows py launcher.
@@ -57,25 +61,23 @@ def launch_gui() -> None:
         import tkinter  # noqa: F401
     except ImportError:
         if os.environ.get("AGENTCOUNCIL_GUI_RERUN") == "1":
-            print(
+            logger.error(
                 "Error: tkinter is unavailable even in the restarted interpreter.\n"
                 "Install Python with Tcl/Tk (python.org) or `uv python install <version>` "
-                "with tkinter support, or use CLI mode (without --gui).",
-                file=sys.stderr,
+                "with tkinter support, or use CLI mode (without --gui)."
             )
             sys.exit(1)
 
         interpreter = _find_interpreter_with_tkinter()
         if interpreter is None:
-            print(
+            logger.error(
                 "Error: tkinter was not found in any detected Python interpreter.\n"
                 "Install Python with Tcl/Tk (python.org) or `uv python install <version>`.\n"
-                "Continuing in CLI mode (use --idea/--agents etc. without --gui).",
-                file=sys.stderr,
+                "Continuing in CLI mode (use --idea/--agents etc. without --gui)."
             )
             return
 
-        print(
+        logger.info(
             f"tkinter is unavailable in the current interpreter — restarting with {interpreter}..."
         )
         env = dict(os.environ)

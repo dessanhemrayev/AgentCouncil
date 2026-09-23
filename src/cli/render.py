@@ -10,7 +10,10 @@ import json
 from typing import Dict, List, Optional
 
 from ..core.aggregation import extract_json_block
+from ..core.logging_utils import get_logger
 from ..core.models import AgentResult, CouncilMember
+
+logger = get_logger("render")
 
 
 def render_claims_map_lines(claims_map: dict) -> List[str]:
@@ -370,29 +373,31 @@ def print_vote_summary(summary: dict) -> None:
     total = len(votes) + len(missing)
 
     if votes:
-        print("Individual votes:")
+        logger.info("Individual votes:")
         for name, vote in votes.items():
             verdict = f" — {vote['verdict']}" if vote.get("verdict") else ""
-            print(f"  {name}: {vote['score']}/10{verdict}")
+            logger.info("  %s: %s/10%s", name, vote["score"], verdict)
 
     if missing:
-        print(f"\nCould not extract a vote: {', '.join(missing)}")
+        logger.warning("\nCould not extract a vote: %s", ", ".join(missing))
 
     if total and len(votes) < total:
-        print(
+        logger.warning(
             f"\n⚠ DEGRADED: {len(votes)}/{total} votes — part of the council dropped out or gave no recognizable vote."
         )
 
     if summary["average_score"] is not None:
-        print(
+        logger.info(
             f"\nCouncil average score: {summary['average_score']:.1f}/10 "
             f"(min {summary['min_score']}, max {summary['max_score']}, "
             f"votes: {len(votes)}/{total})"
         )
     else:
-        print("\nNo agent provided a recognizable vote — final score unavailable.")
+        logger.warning(
+            "\nNo agent provided a recognizable vote — final score unavailable."
+        )
 
-    print(
+    logger.warning(
         "\n⚠ Secondary metric: agent scores may be correlated (overlapping model families), "
         "and the scale is not calibrated — use it to track opinion drift, not as proof of idea quality."
     )
@@ -406,41 +411,41 @@ def print_vote_trajectory(trajectory: dict) -> None:
     if not rows:
         return
 
-    print("\nScore trajectory R2 → R3:")
+    logger.info("\nScore trajectory R2 → R3:")
     for row in rows:
         r2 = row.get("r2_score")
         r3 = row.get("r3_score")
         if r2 is None or r3 is None:
-            print(f"  {row['agent']}: incomplete data (R2={r2}, R3={r3})")
+            logger.warning("  %s: incomplete data (R2=%s, R3=%s)", row["agent"], r2, r3)
             continue
         arrow = ""
         if row.get("moved_toward_mean") is True:
             arrow = " (toward the R3 mean)"
         elif row.get("moved_toward_mean") is False:
             arrow = " (away from the R3 mean)"
-        print(f"  {row['agent']}: {r2} → {r3}{arrow}")
+        logger.info("  %s: %s → %s%s", row["agent"], r2, r3, arrow)
 
 
 def print_results(results: Dict[str, AgentResult], show_json: bool = False) -> None:
     for name, result in results.items():
-        print(f"\n### {name}\n")
+        logger.info("\n### %s\n", name)
 
         if result.error:
-            print("ERROR:")
-            print(result.error)
+            logger.error("ERROR:")
+            logger.error("%s", result.error)
 
             if result.output:
-                print("\nSTDOUT:")
-                print(result.output)
+                logger.info("\nSTDOUT:")
+                logger.info("%s", result.output)
             continue
 
-        print(result.output)
+            logger.info("%s", result.output)
 
         if show_json:
             parsed = extract_json_block(result.output)
             if parsed is not None:
-                print("\n[structured]")
-                print(json.dumps(parsed, ensure_ascii=False, indent=2))
+                logger.info("\n[structured]")
+                logger.info("%s", json.dumps(parsed, ensure_ascii=False, indent=2))
 
 
 def _member_name(member) -> str:
@@ -465,6 +470,6 @@ def report_dropped(
     dropped = [_member_name(m) for m in before if _member_name(m) not in after_names]
 
     if dropped:
-        print(
+        logger.warning(
             f"\nDropped after {round_name} (error/empty response): {', '.join(dropped)}"
         )

@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from ..config.agents import AGENTS_WITHOUT_FILE_SUPPORT
+from .logging_utils import get_logger
 from .models import (
     KIND_CLI,
     KIND_OPENAI,
@@ -24,6 +25,8 @@ from .models import (
     RunContext,
     Runner,
 )
+
+logger = get_logger("core.cli_runner")
 
 # Prompt-length limits for the command line, per executable kind:
 # .cmd/.bat (npm CLIs) go through cmd.exe (~8191 chars), raw .exe
@@ -106,10 +109,12 @@ class CliRunner:
         max_arg_prompt_length = _max_arg_prompt_length(executable)
 
         if len(prompt) > max_arg_prompt_length:
-            print(
-                f"[cli_runner] {name}: prompt length {len(prompt)} exceeds "
-                f"threshold {max_arg_prompt_length} for {executable}",
-                file=sys.stderr,
+            logger.warning(
+                "[cli_runner] %s: prompt length %s exceeds threshold %s for %s",
+                name,
+                len(prompt),
+                max_arg_prompt_length,
+                executable,
             )
 
         if has_placeholder and len(prompt) <= max_arg_prompt_length:
@@ -135,15 +140,14 @@ class CliRunner:
                 cmd = [item.replace("{prompt}", f"@{prompt_file}") for item in command]
                 stdin_data = None
 
-                print(
-                    f"[cli_runner] {name}: using file fallback @{prompt_file}",
-                    file=sys.stderr,
+                logger.info(
+                    "[cli_runner] %s: using file fallback @%s", name, prompt_file
                 )
             except Exception as exc:  # noqa: BLE001 — any fallback failure must degrade to stdin, not crash the round
-                print(
-                    f"[cli_runner] {name}: file fallback failed ({exc}), "
-                    f"falling back to stdin",
-                    file=sys.stderr,
+                logger.warning(
+                    "[cli_runner] %s: file fallback failed (%s), falling back to stdin",
+                    name,
+                    exc,
                 )
                 cmd = [item for item in command if "{prompt}" not in item]
                 stdin_data = prompt.encode("utf-8")

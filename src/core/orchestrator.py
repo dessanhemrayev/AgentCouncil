@@ -25,6 +25,7 @@ from ..cli.render import (
 )
 from ..cli.spinner import Spinner
 from ..config.agents import load_config, save_config
+from .logging_utils import get_logger
 from .aggregation import (
     aggregate_claims,
     aggregate_votes,
@@ -43,6 +44,8 @@ from .models import KIND_OPENAI, AgentResult, CouncilMember
 from .session import SessionWriter
 from .verification import verify_claims_quotes
 from .web_utils import search_web_async, format_search_results_for_prompt
+
+logger = get_logger("orchestrator")
 
 
 def _member_name(member) -> str:
@@ -145,12 +148,12 @@ async def _run_web_search(
     timeout = web_search_config.get("timeout", 30.0)
 
     try:
-        print(f"\n[web_search] Searching: {query[:80]}...")
+        logger.info("\n[web_search] Searching: %s...", query[:80])
         results = await search_web_async(
             query, max_results=max_results, timeout=timeout
         )
         if not results:
-            print("[web_search] No results found")
+            logger.info("[web_search] No results found")
             return None
 
         formatted = format_search_results_for_prompt(results)
@@ -158,10 +161,12 @@ async def _run_web_search(
         search_file = evidence_dir / "web_search_results.md"
         evidence_dir.mkdir(parents=True, exist_ok=True)
         search_file.write_text(formatted, encoding="utf-8")
-        print(f"[web_search] Saved {len(results)} results to {search_file.name}")
+        logger.info(
+            "[web_search] Saved %s results to %s", len(results), search_file.name
+        )
         return search_file
     except Exception as exc:
-        print(f"[web_search] Search failed: {exc}")
+        logger.error("[web_search] Search failed: %s", exc)
         return None
 
 
@@ -218,9 +223,9 @@ async def run_council_async(
     status_cb_r1 = _make_stage_cb(session, on_agent_status, "round1")
 
     _emit_stage(session, on_stage, "round1")
-    print("\n" + "=" * 80)
-    print("ROUND 1 — Independent Analysis")
-    print("=" * 80)
+    logger.info("\n%s", "=" * 80)
+    logger.info("ROUND 1 — Independent Analysis")
+    logger.info("=" * 80)
 
     with Spinner(f"ROUND 1 — thinking: {', '.join(_member_name(m) for m in council)}"):
         round1_results, clm_inventory, degradation_status = await run_round1(
@@ -236,9 +241,11 @@ async def run_council_async(
 
     # Report CLM degradation status
     if degradation_status == "partial":
-        print("\n⚠ R1: PARTIAL — CLM inventory parsed from some agents only")
+        logger.warning("\n⚠ R1: PARTIAL — CLM inventory parsed from some agents only")
     elif degradation_status == "degraded":
-        print("\n⚠ R1: DEGRADED — CLM inventory unavailable, proceeding on raw texts")
+        logger.warning(
+            "\n⚠ R1: DEGRADED — CLM inventory unavailable, proceeding on raw texts"
+        )
 
     if len(council) < 2:
         return
@@ -247,28 +254,30 @@ async def run_council_async(
     report_dropped(council, alive1, "Round 1")
 
     if len(alive1) < 2:
-        print(
+        logger.warning(
             "\nFewer than two agents provided a meaningful Round 1 response — cannot continue."
         )
         return
 
     if quick_mode:
         # R1 only, with the mandatory needs_full_council question.
-        print("\n" + "=" * 80)
-        print("QUICK MODE — Round 1 only")
-        print("=" * 80)
+        logger.info("\n%s", "=" * 80)
+        logger.info("QUICK MODE — Round 1 only")
+        logger.info("=" * 80)
         for name, result in round1_results.items():
             if not ok(result):
                 continue
             parsed = extract_json_block(result.output)
             nfc = parsed.get("needs_full_council") if isinstance(parsed, dict) else None
             if isinstance(nfc, dict):
-                print(
+                logger.info(
                     f"{name}: is the full council needed? {nfc.get('answer')} — {nfc.get('reason')}"
                 )
             else:
-                print(f"{name}: did not return needs_full_council")
-        print("\nQuick mode complete. Run with --full for complete 3-round evaluation.")
+                logger.warning("%s: did not return needs_full_council", name)
+            logger.info(
+                "\nQuick mode complete. Run with --full for complete 3-round evaluation."
+            )
         return
 
     status_cb_r2 = _make_stage_cb(session, on_agent_status, "round2")
@@ -282,9 +291,9 @@ async def run_council_async(
     )
     await _run_web_search(r1_query, session, evidence_dir, config)
 
-    print("\n" + "=" * 80)
-    print("ROUND 2 — Cross-Critique")
-    print("=" * 80)
+    logger.info("\n%s", "=" * 80)
+    logger.info("ROUND 2 — Cross-Critique")
+    logger.info("=" * 80)
 
     with Spinner("ROUND 2 — Cross-Critique: everyone reads everyone else's Round 1"):
         round2 = await run_round2(
@@ -308,20 +317,22 @@ async def run_council_async(
     report_dropped(alive1, alive2, "Round 2")
 
     if len(alive2) < 1:
-        print("\nNo agent provided a meaningful Round 2 response — cannot continue.")
+        logger.warning(
+            "\nNo agent provided a meaningful Round 2 response — cannot continue."
+        )
         return
 
     if len(alive2) < 2:
-        print(
+        logger.warning(
             f"\n⚠ Warning: only {len(alive2)} agent provided a meaningful Round 2 response — Round 3 continues with one agent."
         )
 
     # Task mode: after R1/R2 -> executor/work/review pipeline (instead of R3)
     if task_mode:
         roster = [_member_name(m) for m in alive1]
-        print("\n" + "=" * 80)
-        print("TASK MODE — executor vote (R2) + work + review loop")
-        print("=" * 80)
+        logger.info("\n%s", "=" * 80)
+        logger.info("TASK MODE — executor vote (R2) + work + review loop")
+        logger.info("=" * 80)
         with Spinner("TASK MODE — work + review"):
             task_out = await run_task_pipeline(
                 idea,
@@ -354,10 +365,10 @@ async def run_council_async(
         session.write_meta(task_meta)
         verdict_markdown = render_task_verdict_markdown(idea, task_out, task_meta)
         vpath = session.write_task_verdict(verdict_markdown)
-        print(f"\nTask status: {task_out['status']}")
+        logger.info("\nTask status: %s", task_out["status"])
         if task_out.get("aborted_reason"):
-            print(f"  reason: {task_out['aborted_reason']}")
-        print(f"task-verdict: {vpath}")
+            logger.warning("  reason: %s", task_out["aborted_reason"])
+        logger.info("task-verdict: %s", vpath)
         if vpath.exists() and not no_open:
             try:
                 _open_artifact(vpath)
@@ -382,10 +393,10 @@ async def run_council_async(
 
     status_cb_r3 = _make_stage_cb(session, on_agent_status, "round3")
     _emit_stage(session, on_stage, "round3")
-    print("\n" + "=" * 80)
-    print("ROUND 3 — Sequential Rebuttal")
-    print(f"Move order: {' → '.join(_member_name(m) for m in rotated_order)}")
-    print("=" * 80)
+    logger.info("\n%s", "=" * 80)
+    logger.info("ROUND 3 — Sequential Rebuttal")
+    logger.info("Move order: %s", " → ".join(_member_name(m) for m in rotated_order))
+    logger.info("=" * 80)
 
     with Spinner("ROUND 3 — Sequential Rebuttal") as spinner:
 
@@ -415,27 +426,27 @@ async def run_council_async(
     if evidence_dir:
         citation_mismatches = verify_claims_quotes(evidence_dir, round2, round3)
         if citation_mismatches:
-            print("\n" + "=" * 80)
-            print("CITATION VERIFICATION — MISMATCHES FOUND")
-            print("=" * 80)
+            logger.info("\n%s", "=" * 80)
+            logger.warning("CITATION VERIFICATION — MISMATCHES FOUND")
+            logger.info("=" * 80)
             for m in citation_mismatches:
-                print(m)
+                logger.warning("%s", m)
             # Write mismatches to session for verdict.md
             session.write_citation_mismatches(citation_mismatches)
 
     # Claim-level map — CLM x round matrix, pure aggregation (no LLM calls)
     claims_map = aggregate_claims(clm_inventory, round2, round3, evidence_dir)
 
-    print("\n" + "=" * 80)
-    print("CLAIM MAP — Survival of Claims")
-    print("=" * 80)
+    logger.info("\n%s", "=" * 80)
+    logger.info("CLAIM MAP — Survival of Claims")
+    logger.info("=" * 80)
     for line in render_claims_map_lines(claims_map):
-        print(line)
+        logger.info("%s", line)
 
     _emit_stage(session, on_stage, "vote")
-    print("\n" + "=" * 80)
-    print("FINAL — Council Vote")
-    print("=" * 80)
+    logger.info("\n%s", "=" * 80)
+    logger.info("FINAL — Council Vote")
+    logger.info("=" * 80)
 
     vote_summary = aggregate_votes(round3)
     print_vote_summary(vote_summary)
