@@ -1,9 +1,7 @@
-
-
 import sys
 import threading
 import time
-from typing import Optional, TextIO
+from typing import Any, Optional, TextIO
 
 from yaspin import yaspin as _yaspin
 
@@ -20,7 +18,7 @@ class Spinner:
         self._stream = stream if stream is not None else sys.stdout
         self._text = text
         self._enabled = self._stream.isatty() if enabled is None else enabled
-        self._spinner = None
+        self._spinner: Optional[Any] = None
         self._started_at: Optional[float] = None
         self._timer_thread: Optional[threading.Thread] = None
 
@@ -32,7 +30,9 @@ class Spinner:
             return self
 
         self._started_at = time.monotonic()
-        self._spinner = _yaspin(text=self._render_text(), stream=self._stream, timer=False)
+        self._spinner = _yaspin(
+            text=self._render_text(), stream=self._stream, timer=False
+        )
         self._spinner.start()
         self._timer_thread = threading.Thread(target=self._update_elapsed, daemon=True)
         self._timer_thread.start()

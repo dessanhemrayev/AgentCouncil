@@ -121,10 +121,14 @@ def responses_post(
             raise ApiError(f"{model}: {message}") from exc
         except urllib.error.URLError as exc:
             if isinstance(getattr(exc, "reason", None), TimeoutError):
-                raise ApiTimeout(f"Timeout: API did not respond within {timeout} sec.") from exc
+                raise ApiTimeout(
+                    f"Timeout: API did not respond within {timeout} sec."
+                ) from exc
             raise ApiError(f"{model}: URLError: {getattr(exc, 'reason', exc)}") from exc
         except TimeoutError:
-            raise ApiTimeout(f"Timeout: API did not respond within {timeout} sec.") from None
+            raise ApiTimeout(
+                f"Timeout: API did not respond within {timeout} sec."
+            ) from None
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ApiError(f"{model}: invalid API response: {exc}") from exc
 

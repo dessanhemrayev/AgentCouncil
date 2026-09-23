@@ -21,9 +21,7 @@ def render_claims_map_lines(claims_map: dict) -> List[str]:
     untracked = claims_map.get("untracked_r2", []) + claims_map.get("untracked_r3", [])
 
     if not claims and not untracked:
-        lines.append(
-            "(claims map unavailable — no CLM inventory was recognized)"
-        )
+        lines.append("(claims map unavailable — no CLM inventory was recognized)")
         return lines
 
     for claim in sorted(claims, key=lambda c: c["id"]):
@@ -199,9 +197,7 @@ def render_verdict_markdown(
             f"votes: {len(votes)}/{total})"
         )
     else:
-        lines.append(
-            "No agent provided a recognizable vote — final score unavailable."
-        )
+        lines.append("No agent provided a recognizable vote — final score unavailable.")
     if total and len(votes) < total:
         lines.append("")
         lines.append(
@@ -394,9 +390,7 @@ def print_vote_summary(summary: dict) -> None:
             f"votes: {len(votes)}/{total})"
         )
     else:
-        print(
-            "\nNo agent provided a recognizable vote — final score unavailable."
-        )
+        print("\nNo agent provided a recognizable vote — final score unavailable.")
 
     print(
         "\n⚠ Secondary metric: agent scores may be correlated (overlapping model families), "

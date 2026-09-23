@@ -19,8 +19,9 @@ from src.core.web_utils import fetch_url, is_url, save_fetched_evidence
 
 
 class QueueWriter(io.TextIOBase):
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: "queue.Queue[str]", on_line=None):
         self._q = q
+        self._on_line = on_line
         self._buffer = ""
 
     def write(self, s: str) -> int:
@@ -28,6 +29,8 @@ class QueueWriter(io.TextIOBase):
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             self._q.put(line)
+            if self._on_line is not None:
+                self._on_line(line)
         return len(s)
 
     def flush(self) -> None:
@@ -59,15 +62,16 @@ class CouncilWorker:
         from ..core.orchestrator import run_council_async
         from ..core.session import SessionWriter
 
-        queue_writer = QueueWriter(self._log_queue)
+        session = SessionWriter()
+        session.write_idea(task)
+        queue_writer = QueueWriter(
+            self._log_queue, getattr(session, "write_console", None)
+        )
         old_stdout, old_stderr = sys.stdout, sys.stderr
         setattr(sys, "stdout", queue_writer)
         setattr(sys, "stderr", queue_writer)
 
         try:
-            session = SessionWriter()
-            session.write_idea(task)
-
             evidence_dir = None
             if gui.evidence_files:
                 evidence_dir = session.dir / "evidence"

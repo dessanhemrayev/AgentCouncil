@@ -74,9 +74,25 @@ def _member_meta(member: CouncilMember) -> dict:
     return {"name": member.name, "type": "cli", "command": member.command}
 
 
+def _write_event(session: SessionWriter, event: str, **data: object) -> None:
+    """Write telemetry when the session implementation supports it."""
+    writer = getattr(session, "write_event", None)
+    if writer is not None:
+        writer(event, **data)
+
+
+def _open_artifact(path: Path) -> None:
+    """Open a generated artifact when the host platform exposes startfile."""
+    opener = getattr(os, "startfile", None)
+    if callable(opener):
+        opener(path)
+
+
 def _make_stage_cb(
-    on_agent_status: Optional[Callable[[str, str, str], None]], stage: str
-) -> Optional[Callable[[str, str], None]]:
+    session: SessionWriter,
+    on_agent_status: Optional[Callable[[str, str, str], None]],
+    stage: str,
+) -> Callable[[str, str], None]:
     """Wraps on_agent_status, adding a stage label to each event.
 
     The external callback (GUI) receives (agent_name, status, stage) — using
@@ -85,17 +101,22 @@ def _make_stage_cb(
     two-argument — the wrapper supplies the stage itself. CLI
     (on_agent_status=None) is unaffected — returns None.
     """
-    if on_agent_status is None:
-        return None
 
     def cb(agent_name: str, status: str) -> None:
-        on_agent_status(agent_name, status, stage)
+        _write_event(
+            session, "agent_status", agent=agent_name, status=status, stage=stage
+        )
+        if on_agent_status is not None:
+            on_agent_status(agent_name, status, stage)
 
     return cb
 
 
-def _emit_stage(on_stage: Optional[Callable[[str], None]], stage: str) -> None:
+def _emit_stage(
+    session: SessionWriter, on_stage: Optional[Callable[[str], None]], stage: str
+) -> None:
     """Notifies UI of transition to a new stage (for pipeline chip highlighting)."""
+    _write_event(session, "stage", stage=stage)
     if on_stage is not None:
         on_stage(stage)
 
@@ -170,6 +191,13 @@ async def run_council_async(
         to the next stage (including the pure-Python "vote" aggregation).
     """
     wall_start = time.monotonic()
+    _write_event(
+        session,
+        "run_started",
+        task_mode=task_mode,
+        quick_mode=quick_mode,
+        agents=[_member_name(member) for member in council],
+    )
 
     # Load config for web_search settings
     config = load_config(config_path)
@@ -187,9 +215,9 @@ async def run_council_async(
     # Web search for Round 1: search based on the idea
     await _run_web_search(idea, session, evidence_dir, config)
 
-    status_cb_r1 = _make_stage_cb(on_agent_status, "round1")
+    status_cb_r1 = _make_stage_cb(session, on_agent_status, "round1")
 
-    _emit_stage(on_stage, "round1")
+    _emit_stage(session, on_stage, "round1")
     print("\n" + "=" * 80)
     print("ROUND 1 — Independent Analysis")
     print("=" * 80)
@@ -243,8 +271,8 @@ async def run_council_async(
         print("\nQuick mode complete. Run with --full for complete 3-round evaluation.")
         return
 
-    status_cb_r2 = _make_stage_cb(on_agent_status, "round2")
-    _emit_stage(on_stage, "round2")
+    status_cb_r2 = _make_stage_cb(session, on_agent_status, "round2")
+    _emit_stage(session, on_stage, "round2")
 
     # Web search for Round 2: search for key claims from Round 1
     r1_query = (
@@ -280,9 +308,7 @@ async def run_council_async(
     report_dropped(alive1, alive2, "Round 2")
 
     if len(alive2) < 1:
-        print(
-            "\nNo agent provided a meaningful Round 2 response — cannot continue."
-        )
+        print("\nNo agent provided a meaningful Round 2 response — cannot continue.")
         return
 
     if len(alive2) < 2:
@@ -306,8 +332,8 @@ async def run_council_async(
                 session,
                 max_review_iterations=max_reviews,
                 work_timeout=work_timeout,
-                on_agent_status=_make_stage_cb(on_agent_status, "task"),
-                on_stage=on_stage,
+                on_agent_status=_make_stage_cb(session, on_agent_status, "task"),
+                on_stage=lambda stage: _emit_stage(session, on_stage, stage),
             )
         task_meta = {
             "wall_time_seconds": time.monotonic() - wall_start,
@@ -324,7 +350,7 @@ async def run_council_async(
             "degradation_status": degradation_status,
         }
         # Task-mode verdict: the GUI "Verdict" chip reuses the "vote" event.
-        _emit_stage(on_stage, "vote")
+        _emit_stage(session, on_stage, "vote")
         session.write_meta(task_meta)
         verdict_markdown = render_task_verdict_markdown(idea, task_out, task_meta)
         vpath = session.write_task_verdict(verdict_markdown)
@@ -334,7 +360,7 @@ async def run_council_async(
         print(f"task-verdict: {vpath}")
         if vpath.exists() and not no_open:
             try:
-                os.startfile(vpath)
+                _open_artifact(vpath)
             except Exception:
                 pass
         return
@@ -354,14 +380,19 @@ async def run_council_async(
     )
     await _run_web_search(r2_query, session, evidence_dir, config)
 
-    status_cb_r3 = _make_stage_cb(on_agent_status, "round3")
-    _emit_stage(on_stage, "round3")
+    status_cb_r3 = _make_stage_cb(session, on_agent_status, "round3")
+    _emit_stage(session, on_stage, "round3")
     print("\n" + "=" * 80)
     print("ROUND 3 — Sequential Rebuttal")
     print(f"Move order: {' → '.join(_member_name(m) for m in rotated_order)}")
     print("=" * 80)
 
     with Spinner("ROUND 3 — Sequential Rebuttal") as spinner:
+
+        def on_round3_move(name: str) -> None:
+            _write_event(session, "agent_turn", stage="round3", agent=name)
+            spinner.update(f"ROUND 3 — turn: {name}")
+
         round3 = await run_round3(
             idea,
             alive2,
@@ -369,7 +400,7 @@ async def run_council_async(
             round2,
             session,
             start_index=start_index,
-            on_move=lambda name: spinner.update(f"ROUND 3 — turn: {name}"),
+            on_move=on_round3_move,
             evidence_dir=evidence_dir,
             on_agent_status=status_cb_r3,
             round_timeout=round_timeout,
@@ -401,7 +432,7 @@ async def run_council_async(
     for line in render_claims_map_lines(claims_map):
         print(line)
 
-    _emit_stage(on_stage, "vote")
+    _emit_stage(session, on_stage, "vote")
     print("\n" + "=" * 80)
     print("FINAL — Council Vote")
     print("=" * 80)
@@ -409,12 +440,20 @@ async def run_council_async(
     vote_summary = aggregate_votes(round3)
     print_vote_summary(vote_summary)
     session.write_vote(vote_summary)
+    _write_event(
+        session,
+        "vote_aggregated",
+        votes=vote_summary.get("votes", {}),
+        missing=vote_summary.get("missing", []),
+        average_score=vote_summary.get("average_score"),
+    )
     session.write_claims_map(claims_map)
 
     # R2 -> R3 score trajectory — mechanical signal of compression toward consensus
     vote_trajectory = compute_vote_trajectory(round2, round3)
     print_vote_trajectory(vote_trajectory)
     session.write_vote_trajectory(vote_trajectory)
+    _write_event(session, "trajectory_computed", trajectory=vote_trajectory)
 
     meta = {
         "wall_time_seconds": time.monotonic() - wall_start,
@@ -438,6 +477,6 @@ async def run_council_async(
     verdict_path = session.write_verdict(verdict_markdown)
     if verdict_path.exists() and not no_open:
         try:
-            os.startfile(verdict_path)
+            _open_artifact(verdict_path)
         except Exception:
             pass

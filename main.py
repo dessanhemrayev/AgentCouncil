@@ -13,12 +13,14 @@ from src.config.agents import (
     select_members,
 )
 from src.core.models import KIND_OPENAI
+from src.core.logging_utils import get_logger
 from src.core.orchestrator import run_council_async
-from src.core.session import SessionWriter
+from src.core.session import SessionTee, SessionWriter
 from src.core.web_utils import fetch_url, is_url, save_fetched_evidence
 
 
 Agent = Tuple[str, List[str]]
+logger = get_logger("main")
 
 
 # ===== Non-interactive CLI =====
@@ -310,23 +312,31 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
     evidence_dir = (
         session.dir / "evidence" if (session.dir / "evidence").exists() else None
     )
-    asyncio.run(
-        run_council_async(
-            idea,
-            council,
-            session,
-            quick_mode,
-            args.preset,
-            args.no_open,
-            evidence_dir,
-            args.config,
-            args.adversarial,
-            task_mode=task_mode,
-            max_reviews=max_reviews,
-            work_timeout=work_timeout,
-            round_timeout=round_timeout,
-        )
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = (
+        SessionTee(old_stdout, session),
+        SessionTee(old_stderr, session),
     )
+    try:
+        asyncio.run(
+            run_council_async(
+                idea,
+                council,
+                session,
+                quick_mode,
+                args.preset,
+                args.no_open,
+                evidence_dir,
+                args.config,
+                args.adversarial,
+                task_mode=task_mode,
+                max_reviews=max_reviews,
+                work_timeout=work_timeout,
+                round_timeout=round_timeout,
+            )
+        )
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
     return 0
 
 
@@ -475,22 +485,30 @@ async def main() -> None:
 
     session = SessionWriter()
     session.write_idea(idea)
-    print(f"\nSession is being saved to: {session.dir}")
+    logger.info("\nSession is being saved to: %s", session.dir)
 
     session_path = Path(session.dir) if isinstance(session.dir, str) else session.dir
     evidence_dir = (
         session_path / "evidence" if (session_path / "evidence").exists() else None
     )
 
-    await run_council_async(
-        idea,
-        [member_from_agent(a) for a in council],
-        session,
-        quick_mode=False,
-        preset=None,
-        no_open=False,
-        evidence_dir=evidence_dir,
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout, sys.stderr = (
+        SessionTee(old_stdout, session),
+        SessionTee(old_stderr, session),
     )
+    try:
+        await run_council_async(
+            idea,
+            [member_from_agent(a) for a in council],
+            session,
+            quick_mode=False,
+            preset=None,
+            no_open=False,
+            evidence_dir=evidence_dir,
+        )
+    finally:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
 
 
 def cli_main() -> None:
