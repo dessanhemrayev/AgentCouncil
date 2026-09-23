@@ -253,7 +253,7 @@ def run_noninteractive(args: argparse.Namespace, config: dict) -> int:
         dropped = [member.name for member in council[2:]]
         council = council[:2]
         print(
-            f"Quick mode: используются только 2 агента ({', '.join(m.name for m in council)}); пропущены: {', '.join(dropped)} (для всех агентов — --full)."
+            f"Quick mode: using only 2 agents ({', '.join(m.name for m in council)}); skipped: {', '.join(dropped)} (use --full for all agents)."
         )
 
     print(f"Council participants: {', '.join(m.name for m in council)}")

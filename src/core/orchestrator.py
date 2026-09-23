@@ -194,7 +194,7 @@ async def run_council_async(
     print("ROUND 1 — Independent Analysis")
     print("=" * 80)
 
-    with Spinner(f"ROUND 1 — думают: {', '.join(_member_name(m) for m in council)}"):
+    with Spinner(f"ROUND 1 — thinking: {', '.join(_member_name(m) for m in council)}"):
         round1_results, clm_inventory, degradation_status = await run_round1(
             idea,
             council,
@@ -220,7 +220,7 @@ async def run_council_async(
 
     if len(alive1) < 2:
         print(
-            "\nМеньше двух агентов дали содержательный Round 1 — дальше продолжать не с кем."
+            "\nFewer than two agents provided a meaningful Round 1 response — cannot continue."
         )
         return
 
@@ -236,10 +236,10 @@ async def run_council_async(
             nfc = parsed.get("needs_full_council") if isinstance(parsed, dict) else None
             if isinstance(nfc, dict):
                 print(
-                    f"{name}: нужен ли полный совет? {nfc.get('answer')} — {nfc.get('reason')}"
+                    f"{name}: is the full council needed? {nfc.get('answer')} — {nfc.get('reason')}"
                 )
             else:
-                print(f"{name}: не вернул needs_full_council")
+                print(f"{name}: did not return needs_full_council")
         print("\nQuick mode complete. Run with --full for complete 3-round evaluation.")
         return
 
@@ -281,13 +281,13 @@ async def run_council_async(
 
     if len(alive2) < 1:
         print(
-            "\nНи один агент не дал содержательный Round 2 — дальше продолжать не с кем."
+            "\nNo agent provided a meaningful Round 2 response — cannot continue."
         )
         return
 
     if len(alive2) < 2:
         print(
-            f"\n⚠ Внимание: только {len(alive2)} агент дал содержательный Round 2 — Round 3 продолжается с одним агентом."
+            f"\n⚠ Warning: only {len(alive2)} agent provided a meaningful Round 2 response — Round 3 continues with one agent."
         )
 
     # Task mode: after R1/R2 -> executor/work/review pipeline (instead of R3)
@@ -330,7 +330,7 @@ async def run_council_async(
         vpath = session.write_task_verdict(verdict_markdown)
         print(f"\nTask status: {task_out['status']}")
         if task_out.get("aborted_reason"):
-            print(f"  причина: {task_out['aborted_reason']}")
+            print(f"  reason: {task_out['aborted_reason']}")
         print(f"task-verdict: {vpath}")
         if vpath.exists() and not no_open:
             try:
@@ -369,7 +369,7 @@ async def run_council_async(
             round2,
             session,
             start_index=start_index,
-            on_move=lambda name: spinner.update(f"ROUND 3 — ход: {name}"),
+            on_move=lambda name: spinner.update(f"ROUND 3 — turn: {name}"),
             evidence_dir=evidence_dir,
             on_agent_status=status_cb_r3,
             round_timeout=round_timeout,

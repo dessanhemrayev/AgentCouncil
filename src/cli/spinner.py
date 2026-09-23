@@ -71,7 +71,7 @@ class Spinner:
         if self._started_at is None:
             return label
         elapsed = int(time.monotonic() - self._started_at)
-        return f"{label} ({elapsed}с)"
+        return f"{label} ({elapsed}s)"
 
     def _update_elapsed(self) -> None:
         while self._spinner is not None:

@@ -109,22 +109,22 @@ def get_evaluation_prompt(
         )
 
     return f"""
-Ты участвуешь в независимой оценке идеи. Идея пользователя: «{idea}»
+You are participating in an independent evaluation of an idea. User's idea: "{idea}"
 {evidence_section}
 
-Проанализируй:
-1. Что именно предлагается.
-2. Какую проблему это решает.
-3. Что в идее сильного.
-4. Что может быть ошибочным.
-5. Какие существуют альтернативы.
-6. Что уже может существовать.
-7. Какие эксперименты нужны для проверки.
-8. Итоговую оценку от 0 до 10.
+Analyze:
+1. What exactly is being proposed.
+2. What problem it solves.
+3. What is strong about the idea.
+4. What may be wrong.
+5. What alternatives exist.
+6. What may already exist.
+7. What experiments are needed to validate it.
+8. An overall score from 0 to 10.
 
-ВАЖНО:
-Не ориентируйся на мнения других агентов.
-Это независимая оценка.
+IMPORTANT:
+Do not anchor on the opinions of other agents.
+This is an independent evaluation.
 {EVAL_SKILLS_INSTRUCTION}
 
 CLM INVENTORY (REQUIRED):

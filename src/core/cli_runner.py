@@ -84,7 +84,7 @@ class CliRunner:
         timeout = ctx.timeout
 
         if not command:
-            return AgentResult(name=name, error="Не задана команда.")
+            return AgentResult(name=name, error="No command configured.")
 
         if on_status is not None:
             on_status(name, "running")
@@ -97,8 +97,8 @@ class CliRunner:
             return AgentResult(
                 name=name,
                 error=(
-                    f"Команда не найдена: {command[0]}. "
-                    "Проверьте, что агент установлен и доступен в PATH."
+                    f"Command not found: {command[0]}. "
+                    "Make sure the agent is installed and available in PATH."
                 ),
             )
 
@@ -190,7 +190,7 @@ class CliRunner:
                     on_status(name, "timeout")
                 return AgentResult(
                     name=name,
-                    error=f"Таймаут: агент не ответил за {timeout} сек.",
+                    error=f"Timeout: agent did not respond within {timeout} sec.",
                 )
 
             stdout_text = stdout.decode("utf-8", errors="replace").strip()
@@ -202,7 +202,7 @@ class CliRunner:
                 return AgentResult(
                     name=name,
                     output=stdout_text,
-                    error=stderr_text or f"Код возврата: {process.returncode}.",
+                    error=stderr_text or f"Exit code: {process.returncode}.",
                 )
 
             if not stdout_text and stderr_text:
@@ -217,7 +217,7 @@ class CliRunner:
                 on_status(name, "done")
             return AgentResult(
                 name=name,
-                output=stdout_text or "Пустой ответ от агента.",
+                output=stdout_text or "Empty response from agent.",
             )
 
         except Exception as exc:  # noqa: BLE001 — any delivery failure must become an AgentResult error, not a crashed round

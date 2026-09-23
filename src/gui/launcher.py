@@ -58,9 +58,9 @@ def launch_gui() -> None:
     except ImportError:
         if os.environ.get("AGENTCOUNCIL_GUI_RERUN") == "1":
             print(
-                "Ошибка: tkinter недоступен даже в перезапущенном интерпретаторе.\n"
-                "Установите Python с Tcl/Tk (python.org) или `uv python install <version>` "
-                "с поддержкой tkinter, либо используйте CLI-режим (без --gui).",
+                "Error: tkinter is unavailable even in the restarted interpreter.\n"
+                "Install Python with Tcl/Tk (python.org) or `uv python install <version>` "
+                "with tkinter support, or use CLI mode (without --gui).",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -68,15 +68,15 @@ def launch_gui() -> None:
         interpreter = _find_interpreter_with_tkinter()
         if interpreter is None:
             print(
-                "Ошибка: tkinter не найден ни в одном обнаруженном интерпретаторе Python.\n"
-                "Установите Python с Tcl/Tk (python.org) или `uv python install <version>`.\n"
-                "Продолжаю в CLI-режиме (используйте --idea/--agents и т.д. без --gui).",
+                "Error: tkinter was not found in any detected Python interpreter.\n"
+                "Install Python with Tcl/Tk (python.org) or `uv python install <version>`.\n"
+                "Continuing in CLI mode (use --idea/--agents etc. without --gui).",
                 file=sys.stderr,
             )
             return
 
         print(
-            f"tkinter недоступен в текущем интерпретаторе — перезапуск через {interpreter}..."
+            f"tkinter is unavailable in the current interpreter — restarting with {interpreter}..."
         )
         env = dict(os.environ)
         env["AGENTCOUNCIL_GUI_RERUN"] = "1"

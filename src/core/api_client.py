@@ -92,7 +92,7 @@ def responses_post(
     api_key = os.environ.get(api_key_env, "").strip()
     if not api_key:
         raise ApiError(
-            f"NO KEY: переменная окружения {api_key_env} не задана или пуста."
+            f"NO KEY: environment variable {api_key_env} is missing or empty."
         )
 
     url = base_url.rstrip("/") + "/v1/responses"
@@ -121,13 +121,13 @@ def responses_post(
             raise ApiError(f"{model}: {message}") from exc
         except urllib.error.URLError as exc:
             if isinstance(getattr(exc, "reason", None), TimeoutError):
-                raise ApiTimeout(f"Таймаут: API не ответил за {timeout} сек.") from exc
+                raise ApiTimeout(f"Timeout: API did not respond within {timeout} sec.") from exc
             raise ApiError(f"{model}: URLError: {getattr(exc, 'reason', exc)}") from exc
         except TimeoutError:
-            raise ApiTimeout(f"Таймаут: API не ответил за {timeout} сек.") from None
+            raise ApiTimeout(f"Timeout: API did not respond within {timeout} sec.") from None
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ApiError(f"{model}: некорректный ответ API: {exc}") from exc
+            raise ApiError(f"{model}: invalid API response: {exc}") from exc
 
     raise ApiError(
-        f"{model}: исчерпаны попытки запроса"
+        f"{model}: request attempts exhausted"
     )  # pragma: no cover — loop guard

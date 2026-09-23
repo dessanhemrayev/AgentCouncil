@@ -11,10 +11,10 @@ if TYPE_CHECKING:
     from .app import CouncilGUI
 
 PIPELINE_STAGES = [
-    ("round1", "R1 Анализ"),
-    ("round2", "R2 Критика"),
-    ("round3", "R3 Раунд"),
-    ("vote", "Голосование"),
+    ("round1", "R1 Analysis"),
+    ("round2", "R2 Critique"),
+    ("round3", "R3 Round"),
+    ("vote", "Voting"),
 ]
 PIPELINE_STAGE_KEYS = [key for key, _ in PIPELINE_STAGES]
 STAGE_LABEL_KEYS = {
@@ -24,7 +24,7 @@ STAGE_LABEL_KEYS = {
     "vote": "stage_vote",
 }
 TASK_STAGE_LABELS = {
-    "task": "Работа+Ревью",
+    "task": "Work + Review",
 }
 TASK_STAGE_LABEL_KEYS = {
     "task": "stage_work_review",
@@ -54,7 +54,7 @@ CELL_GLYPHS = {
 }
 
 
-def stage_display_name(stage: str, language: str = "ru") -> str:
+def stage_display_name(stage: str, language: str = "en") -> str:
     """Return a human-readable stage name, including dynamic task stages."""
     if stage in TASK_STAGE_LABEL_KEYS:
         return translate(language, TASK_STAGE_LABEL_KEYS[stage])
@@ -126,7 +126,7 @@ def _stage_labels(gui: "CouncilGUI") -> dict[str, str]:
     if labels:
         return labels
     return {
-        key: stage_display_name(key, getattr(gui, "language", "ru"))
+        key: stage_display_name(key, getattr(gui, "language", "en"))
         for key in PIPELINE_STAGE_KEYS
     }
 
